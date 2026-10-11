@@ -55,6 +55,9 @@ Each can be revisited; none is load-bearing enough to block work.
       and its voices depend on the streaming machine's OS.
 - [ ] 6. Donations appear as alerts in OBS: token-protected overlay, Server-Sent
       Events, queued playback, missed alerts replayed after a reconnect.
+      Status: built and demonstrated in Chromium and Docker (live alert from a signed
+      IPN, unicode, HTML shown as text, ack after display, two missed alerts replayed
+      in order, clean console). Not yet confirmed inside OBS itself.
 - [ ] 7. The streamer can restyle alerts (sound, image, duration, template) without
       touching code.
 - [ ] 8. Donation messages are read aloud (design per item 5).
