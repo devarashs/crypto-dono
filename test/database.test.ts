@@ -1,8 +1,16 @@
 import { mkdtempSync, rmSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { applyMigrations, openDatabase, readSchemaVersion, runInTransaction } from '../src/database.ts';
+import {
+  applyMigrations,
+  latestSchemaVersion,
+  migrations,
+  openDatabase,
+  readSchemaVersion,
+  runInTransaction,
+} from '../src/database.ts';
 
 describe('openDatabase', () => {
   let directory: string;
@@ -15,7 +23,7 @@ describe('openDatabase', () => {
 
   it('creates missing parent directories and migrates to the latest version', () => {
     const database = openDatabase(join(directory, 'nested', 'deeper', 'db.sqlite'));
-    expect(readSchemaVersion(database)).toBe(1);
+    expect(readSchemaVersion(database)).toBe(latestSchemaVersion);
     database.close();
   });
 
@@ -31,7 +39,7 @@ describe('openDatabase', () => {
     first.close();
 
     const second = openDatabase(path);
-    expect(readSchemaVersion(second)).toBe(1);
+    expect(readSchemaVersion(second)).toBe(latestSchemaVersion);
     expect(second.prepare('SELECT donor_name FROM donations').all()).toEqual([
       { donor_name: 'Ann' },
     ]);
@@ -50,17 +58,37 @@ describe('applyMigrations', () => {
     const database = openDatabase(':memory:');
     expect(() =>
       applyMigrations(database, [
-        { version: 2, description: 'half applied', sql: 'CREATE TABLE t (x); SELECT nonsense FROM nowhere;' },
+        { version: latestSchemaVersion + 1, description: 'half applied', sql: 'CREATE TABLE t (x); SELECT nonsense FROM nowhere;' },
       ]),
     ).toThrow();
-    expect(readSchemaVersion(database)).toBe(1);
+    expect(readSchemaVersion(database)).toBe(latestSchemaVersion);
     expect(database.prepare("SELECT name FROM sqlite_master WHERE name = 't'").get()).toBeUndefined();
   });
 
   it('skips migrations at or below the current version', () => {
     const database = openDatabase(':memory:');
     applyMigrations(database, [{ version: 1, description: 'already applied', sql: 'NOT VALID SQL' }]);
-    expect(readSchemaVersion(database)).toBe(1);
+    expect(readSchemaVersion(database)).toBe(latestSchemaVersion);
+  });
+});
+
+describe('upgrading an existing database', () => {
+  it('adds alert_triggered_at to a version 1 database without touching its rows', () => {
+    const database = new DatabaseSync(':memory:');
+    applyMigrations(database, migrations.filter((migration) => migration.version === 1));
+    database
+      .prepare(
+        `INSERT INTO donations (public_id, donor_name, amount_minor, currency, status, created_at, updated_at)
+         VALUES ('p1', 'Ann', 500, 'usd', 'finished', 't', 't')`,
+      )
+      .run();
+
+    applyMigrations(database, migrations);
+
+    expect(readSchemaVersion(database)).toBe(latestSchemaVersion);
+    expect(database.prepare('SELECT donor_name, status, alert_triggered_at FROM donations').all()).toEqual([
+      { donor_name: 'Ann', status: 'finished', alert_triggered_at: null },
+    ]);
   });
 });
 
