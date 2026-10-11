@@ -28,13 +28,18 @@ function buildTestApp(
   const config = loadConfig({
     PUBLIC_BASE_URL: 'https://dono.example.com',
     NOWPAYMENTS_API_KEY: 'test-key',
+    NOWPAYMENTS_IPN_SECRET: 'test-ipn-secret',
     LOG_LEVEL: 'fatal',
     STREAMER_NAME: 'Arash',
     ...environment,
   });
   const donations = createDonationRepository(openDatabase(':memory:'));
   const createInvoice = vi.fn<NowPaymentsClient['createInvoice']>(createInvoiceImplementation);
-  return { app: buildApp(config, { donations, nowPayments: { createInvoice } }), donations, createInvoice };
+  return {
+    app: buildApp(config, { donations, nowPayments: { createInvoice }, onDonationAlert: () => {} }),
+    donations,
+    createInvoice,
+  };
 }
 
 function postDonation(app: FastifyInstance, fields: Record<string, string>, remoteAddress = '203.0.113.7') {

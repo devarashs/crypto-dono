@@ -3,7 +3,8 @@
  * donations table; everything else goes through these functions.
  */
 import { randomBytes } from 'node:crypto';
-import type { Database } from '../database.ts';
+import { runInTransaction, type Database } from '../database.ts';
+import { isForwardTransition, reachesAlertThreshold, type AlertThresholdStatus } from './payment-status.ts';
 
 /** Every status NOWPayments reports, plus `created` for "invoice not yet made". */
 export const donationStatuses = [
@@ -32,9 +33,28 @@ export type Donation = {
   readonly nowpaymentsPaymentId: string | null;
   readonly payCurrency: string | null;
   readonly actuallyPaid: string | null;
+  /** When the alert was triggered; `null` until the payment crossed the threshold. */
+  readonly alertTriggeredAt: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
 };
+
+/** The payment facts carried by one NOWPayments IPN. */
+export type PaymentUpdate = {
+  readonly status: DonationStatus;
+  readonly paymentId: string;
+  readonly invoiceId: string | null;
+  readonly payCurrency: string | null;
+  readonly actuallyPaid: string | null;
+};
+
+export type PaymentUpdateResult =
+  | { readonly outcome: 'unknown-donation' }
+  /** The IPN names a different invoice than the one this donation created. */
+  | { readonly outcome: 'invoice-mismatch'; readonly donation: Donation }
+  /** Older than what is already recorded, e.g. a delayed retry. Nothing changed. */
+  | { readonly outcome: 'stale'; readonly donation: Donation }
+  | { readonly outcome: 'applied'; readonly donation: Donation; readonly alertTriggered: boolean };
 
 export type NewDonation = {
   readonly donorName: string;
@@ -55,6 +75,7 @@ type DonationRow = {
   nowpayments_payment_id: string | null;
   pay_currency: string | null;
   actually_paid: string | null;
+  alert_triggered_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -72,6 +93,13 @@ export function createDonationRepository(database: Database, now: () => Date = (
     RETURNING *
   `);
   const findByPublicIdStatement = database.prepare('SELECT * FROM donations WHERE public_id = ?');
+  const applyPaymentStatement = database.prepare(`
+    UPDATE donations
+    SET status = ?, nowpayments_payment_id = ?, pay_currency = ?, actually_paid = ?,
+        alert_triggered_at = COALESCE(alert_triggered_at, ?), updated_at = ?
+    WHERE public_id = ?
+    RETURNING *
+  `);
   const setInvoiceStatement = database.prepare(`
     UPDATE donations SET nowpayments_invoice_id = ?, updated_at = ?
     WHERE public_id = ?
@@ -105,6 +133,53 @@ export function createDonationRepository(database: Database, now: () => Date = (
       return row === undefined ? undefined : toDonation(row);
     },
 
+    /**
+     * Records a payment status change and decides, atomically, whether it
+     * triggers the donation's alert.
+     *
+     * Idempotent: replaying the same IPN, or any IPN after the alert fired,
+     * never returns `alertTriggered: true` a second time. Updates that would move
+     * the status backwards are ignored.
+     *
+     * @param publicId The donation's public id, which NOWPayments echoes as `order_id`.
+     * @param threshold The status from which a payment earns its alert.
+     */
+    applyPaymentUpdate(
+      publicId: string,
+      update: PaymentUpdate,
+      threshold: AlertThresholdStatus,
+    ): PaymentUpdateResult {
+      return runInTransaction(database, () => {
+        const row = findByPublicIdStatement.get(publicId) as DonationRow | undefined;
+        if (row === undefined) return { outcome: 'unknown-donation' } as const;
+        const current = toDonation(row);
+        if (
+          current.nowpaymentsInvoiceId !== null &&
+          update.invoiceId !== null &&
+          current.nowpaymentsInvoiceId !== update.invoiceId
+        ) {
+          return { outcome: 'invoice-mismatch', donation: current } as const;
+        }
+        if (!isForwardTransition(current.status, update.status)) {
+          return { outcome: 'stale', donation: current } as const;
+        }
+
+        const timestamp = now().toISOString();
+        const alertTriggered =
+          current.alertTriggeredAt === null && reachesAlertThreshold(update.status, threshold);
+        const updatedRow = applyPaymentStatement.get(
+          update.status,
+          update.paymentId,
+          update.payCurrency,
+          update.actuallyPaid,
+          alertTriggered ? timestamp : null,
+          timestamp,
+          publicId,
+        ) as DonationRow;
+        return { outcome: 'applied', donation: toDonation(updatedRow), alertTriggered } as const;
+      });
+    },
+
     /** @returns The updated donation, or `undefined` if no donation has that id. */
     setInvoiceId(publicId: string, invoiceId: string): Donation | undefined {
       const row = setInvoiceStatement.get(invoiceId, now().toISOString(), publicId) as
@@ -133,6 +208,7 @@ function toDonation(row: DonationRow): Donation {
     nowpaymentsPaymentId: row.nowpayments_payment_id,
     payCurrency: row.pay_currency,
     actuallyPaid: row.actually_paid,
+    alertTriggeredAt: row.alert_triggered_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

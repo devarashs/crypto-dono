@@ -38,10 +38,11 @@ Each can be revisited; none is load-bearing enough to block work.
       redirects to its checkout. Validated, minimum enforced, rate-limited.
       Note: per-coin minimums are enforced by NOWPayments' checkout, not by us; the
       donor picks the coin there. DONATION_MIN_AMOUNT is our own floor.
-- [ ] 4. A confirmed payment is recorded exactly once: the IPN webhook verifies the
+- [x] 4. A confirmed payment is recorded exactly once: the IPN webhook verifies the
       HMAC-SHA512 signature, updates status idempotently, and triggers an alert on the
       status chosen by `ALERT_ON_STATUS`. Signature scheme verified against a real
-      sandbox IPN.
+      IPN (production, $5 in USDT on BSC, 2026-10-11: three IPNs, all signatures
+      matched the Node reference form, one alert). The sandbox was unavailable.
 
 ## Phase 2 — Alerts
 

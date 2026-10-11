@@ -19,7 +19,7 @@ type Migration = { readonly version: number; readonly description: string; reado
  * Append only. Never edit or reorder an existing entry: deployed databases have
  * already run it, so a change would silently not apply to them.
  */
-const migrations: readonly Migration[] = [
+export const migrations: readonly Migration[] = [
   {
     version: 1,
     description: 'Create donations table',
@@ -52,7 +52,20 @@ const migrations: readonly Migration[] = [
       CREATE INDEX donations_created_at ON donations (created_at);
     `,
   },
+  {
+    version: 2,
+    description: 'Record when a donation triggered its alert',
+    sql: `
+      -- Set exactly once, in the same transaction as the status update that
+      -- crossed the alert threshold. NULL means no alert has been triggered, which
+      -- is what makes duplicate and retried IPNs harmless.
+      ALTER TABLE donations ADD COLUMN alert_triggered_at TEXT;
+    `,
+  },
 ];
+
+/** The schema version a freshly opened database ends up at. */
+export const latestSchemaVersion = Math.max(...migrations.map((migration) => migration.version));
 
 /**
  * Opens (creating if needed) the database file and brings its schema up to date.
