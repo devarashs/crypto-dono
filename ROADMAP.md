@@ -120,3 +120,15 @@ and Share Tech Mono, hard corners, neon grid and scanlines).
       on existing data, name merging, opt-out, masking and the CSS tab switch.
 - [x] 15. A small socials strip, configured by SOCIAL_LINKS, with icons copied
       from simple-icons (CC0). Empty means no strip.
+
+## Phase 6 — Production
+
+- [ ] 16. The service runs on an always-on AWS Lightsail instance (Ubuntu 24.04,
+      $7 plan, 1 GB RAM, paid from AWS promotional credit) at a Cloudflare-managed
+      subdomain, behind Caddy for automatic HTTPS, with Piper, a swap file, a
+      nightly database backup, and an AWS budget alert.
+      Considered and deferred (2026-10-11): Cloudflare Tunnel in front, with ports
+      80/443 closed, to remove the bandwidth-overage risk from floods. Revisit if
+      traffic or the bill ever looks wrong.
+      The deploy is reproducible from files in deploy/ and the guide in
+      deploy/README.md.

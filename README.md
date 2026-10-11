@@ -234,14 +234,9 @@ on a domain you own, for a permanent address such as `https://dono.example.com`.
 ### A small VPS
 
 Always on, so donations are recorded even while you are offline, and missed
-alerts replay when OBS connects. Run `docker compose up -d` on the server behind
-a reverse proxy that handles HTTPS. With [Caddy](https://caddyserver.com):
-
-```
-dono.example.com {
-    reverse_proxy localhost:3000
-}
-```
+alerts replay when OBS connects. [deploy/README.md](deploy/README.md) is a
+step-by-step guide (tested on a $5 AWS Lightsail instance): Caddy for automatic
+HTTPS, a swap file so 512 MB is enough, and a nightly database backup.
 
 ### A platform (Railway, Fly.io, Render, ...)
 

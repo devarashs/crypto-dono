@@ -1,0 +1,18 @@
+# Caddy terminates HTTPS (certificates from Let's Encrypt, renewed automatically)
+# and forwards everything to the app. It sets X-Forwarded-For and
+# X-Forwarded-Proto, which the app relies on for rate limits and secure cookies.
+
+{$DOMAIN} {
+	# No response compression: it would buffer the overlay's Server-Sent Events
+	# stream, and the pages are small anyway.
+	reverse_proxy crypto-dono:3000 {
+		# Pass each event straight through; never hold the stream back.
+		flush_interval -1
+	}
+
+	header {
+		# Browsers only ever reach this site over HTTPS from now on.
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+}
