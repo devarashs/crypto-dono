@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the service image
+        run: docker build -t crypto-dono:ci .
+      - name: Refuses to start without configuration
+        run: |
+          if docker run --rm crypto-dono:ci; then
+            echo "expected a configuration error" && exit 1
+          fi
+      - name: Starts and answers the health check
+        run: |
+          docker run -d --name ci -p 3000:3000 \
+            -e PUBLIC_BASE_URL=http://localhost:3000 \
+            -e NOWPAYMENTS_API_KEY=ci -e NOWPAYMENTS_IPN_SECRET=ci \
+            -e OVERLAY_TOKEN=ci-overlay-token-0123456789abcdef \
+            crypto-dono:ci
+          for attempt in $(seq 1 30); do
+            curl -fsS http://localhost:3000/healthz && exit 0
+            sleep 1
+          done
+          docker logs ci
+          exit 1
+      - name: Build the optional Piper image
+        run: docker build -t crypto-dono-piper:ci piper
