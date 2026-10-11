@@ -18,6 +18,13 @@ snapshot="data/backup-$stamp.sqlite"
 
 mkdir -p "$backup_dir"
 
+# Remove the in-container snapshot however the script ends, so a failed copy
+# never leaves stray copies of the database filling the data volume.
+cleanup() {
+  docker compose exec -T crypto-dono rm -f "$snapshot" || true
+}
+trap cleanup EXIT
+
 docker compose exec -T crypto-dono node -e "
   const { DatabaseSync } = require('node:sqlite');
   const database = new DatabaseSync('data/crypto-dono.sqlite');
@@ -25,7 +32,6 @@ docker compose exec -T crypto-dono node -e "
   database.close();
 "
 docker compose cp "crypto-dono:/app/$snapshot" "$backup_dir/crypto-dono-$stamp.sqlite"
-docker compose exec -T crypto-dono rm -f "$snapshot"
 
 find "$backup_dir" -name 'crypto-dono-*.sqlite' -mtime +"$keep_days" -delete
 echo "$(date -u +%FT%TZ) backed up to $backup_dir/crypto-dono-$stamp.sqlite"
