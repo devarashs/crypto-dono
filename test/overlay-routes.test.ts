@@ -35,6 +35,7 @@ describe('overlay routes', () => {
     app = buildApp(config, {
       donations,
       leaderboard: store.leaderboard,
+        connections: store.connections,
       nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
       alertHub,
     });
@@ -252,6 +253,7 @@ describe('overlay routes', () => {
       customApp = buildApp(config, {
         donations: customStore.donations,
         leaderboard: customStore.leaderboard,
+        connections: customStore.connections,
         nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
         alertHub: createAlertHub(),
       });
@@ -339,6 +341,7 @@ describe('overlay routes', () => {
       speechApp = buildApp(config, {
         donations: speechDonations,
         leaderboard: speechStore.leaderboard,
+        connections: speechStore.connections,
         nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
         alertHub: createAlertHub(),
         alertSpeech: createAlertSpeech({ synthesize }),
@@ -444,6 +447,7 @@ describe('overlay routes', () => {
       boardApp = buildApp(config, {
         donations: store.donations,
         leaderboard: store.leaderboard,
+        connections: store.connections,
         nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
         alertHub: createAlertHub(),
       });
@@ -532,6 +536,7 @@ describe('overlay routes', () => {
       sceneApp = buildApp(config, {
         donations: store.donations,
         leaderboard: store.leaderboard,
+        connections: store.connections,
         nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
         alertHub: createAlertHub(),
       });
@@ -633,6 +638,7 @@ describe('overlay routes', () => {
       eventApp = buildApp(config, {
         donations: store.donations,
         leaderboard: store.leaderboard,
+        connections: store.connections,
         nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
         alertHub: eventHub,
       });

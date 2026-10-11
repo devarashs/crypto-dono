@@ -12,6 +12,8 @@ import { createAlertSpeech } from './tts/alert-speech.ts';
 import { createPiperClient } from './tts/piper-client.ts';
 import { createDonationRepository } from './donations/donation-repository.ts';
 import { createLeaderboardQueries } from './donations/leaderboard.ts';
+import { createConnectionStore } from './platforms/connection-store.ts';
+import { createTwitchApi } from './twitch/twitch-api.ts';
 import { createNowPaymentsClient } from './nowpayments/nowpayments-client.ts';
 
 function loadConfigOrExit() {
@@ -50,6 +52,14 @@ const database = openDatabaseOrExit(config.databasePath);
 const app = buildApp(config, {
   donations: createDonationRepository(database),
   leaderboard: createLeaderboardQueries(database),
+  connections: createConnectionStore(database),
+  // The EventSub signing secret lives next to the database, like the session key.
+  ...(config.twitch !== null && {
+    twitch: {
+      api: createTwitchApi({ clientId: config.twitch.clientId, clientSecret: config.twitch.clientSecret }),
+      eventSubSecret: loadOrCreateSessionSecret(join(dirname(config.databasePath), 'twitch-eventsub-secret')),
+    },
+  }),
   nowPayments: createNowPaymentsClient({
     apiKey: config.nowPayments.apiKey,
     baseUrl: config.nowPayments.baseUrl,
@@ -88,4 +98,5 @@ app.log.info(`Public address: ${config.publicBaseUrl}`);
 app.log.info(`Database: ${config.databasePath}`);
 app.log.info(`NOWPayments: ${config.nowPayments.sandbox ? 'sandbox' : 'production'}`);
 app.log.info(`Text-to-speech: ${config.tts === null ? 'off' : config.tts.url}`);
+app.log.info(`Twitch: ${config.twitch === null ? 'off (set TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET)' : 'configured; connect it from /admin'}`);
 app.log.info(`Admin page: ${config.adminPassword === null ? 'off (set ADMIN_PASSWORD)' : '/admin'}`);

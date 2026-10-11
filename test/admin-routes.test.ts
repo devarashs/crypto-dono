@@ -28,13 +28,14 @@ function build(environment: Record<string, string> = {}): Context {
     BANNED_WORDS: 'darn',
     ...environment,
   });
-  const { donations, leaderboard } = createInMemoryStore();
+  const { donations, leaderboard, connections } = createInMemoryStore();
   const alertHub = createAlertHub();
   const published: OverlayAlert[] = [];
   alertHub.subscribe((alert) => published.push(alert));
   const app = buildApp(config, {
     donations,
     leaderboard,
+    connections,
     nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
     alertHub,
     ...(config.adminPassword !== null && { adminSessionSecret: 'a'.repeat(64) }),

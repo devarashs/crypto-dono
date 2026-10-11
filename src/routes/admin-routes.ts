@@ -17,8 +17,13 @@
  */
 import fastifyCookie from '@fastify/cookie';
 import fastifySession from '@fastify/session';
+import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { isCorrectAdminPassword } from '../admin/admin-auth.ts';
+import type { ConnectionStore } from '../platforms/connection-store.ts';
+import type { TwitchApi } from '../twitch/twitch-api.ts';
+import { connectTwitch, disconnectTwitch } from '../twitch/twitch-connection.ts';
+import type { TwitchStatus } from '../web/admin-pages.ts';
 import type { AlertHub } from '../alerts/alert-hub.ts';
 import { donationToAlertSource, type AlertPresenter, type PresentedAlert } from '../alerts/alert-presenter.ts';
 import type { Config } from '../config.ts';
@@ -40,7 +45,19 @@ export type AdminRouteDependencies = {
   readonly publishAlert: (presented: PresentedAlert) => void;
   /** Signs the session cookie; at least 32 characters. */
   readonly sessionSecret: string;
+  readonly connections: ConnectionStore;
+  /** Present when TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET are set. */
+  readonly twitch?: {
+    readonly api: TwitchApi;
+    readonly eventSubSecret: string;
+    /** Absolute URL of this server's EventSub webhook. */
+    readonly callbackUrl: string;
+  };
+  readonly now?: () => number;
 };
+
+/** How long a "Connect Twitch" click stays valid while the streamer is on twitch.tv. */
+const oauthStateLifetimeMs = 10 * 60 * 1000;
 
 const sessionLifetimeMs = 12 * 60 * 60 * 1000;
 const donationsPerPage = 25;
@@ -51,10 +68,39 @@ const notices: Readonly<Record<string, string>> = {
   skipped: 'Alert skipped. It will not be shown or replayed.',
   'not-found': 'That donation no longer exists.',
   'no-alert': 'That donation has not been paid, so it has no alert.',
+  'twitch-connected': 'Twitch connected. Follows, subs, bits and raids will alert on stream.',
+  'twitch-partial': 'Twitch connected, but some event types were refused. Check the server log, then reconnect.',
+  'twitch-denied': 'Twitch access was not granted, so nothing changed.',
+  'twitch-failed': 'Twitch could not be reached or refused the request. Check the server log and try again.',
+  'twitch-expired': 'That Twitch sign-in took too long or was already used. Click Connect Twitch again.',
+  'twitch-disconnected': 'Twitch disconnected. Its alerts have stopped.',
 };
 
 export function registerAdminRoutes(app: FastifyInstance, dependencies: AdminRouteDependencies): void {
-  const { config, donations, alertHub, presentAlert, publishAlert } = dependencies;
+  const { config, donations, alertHub, presentAlert, publishAlert, connections, twitch } = dependencies;
+  const now = dependencies.now ?? Date.now;
+  const twitchRedirectUri = `${config.publicBaseUrl}/admin/twitch/callback`;
+
+  /**
+   * One-time values linking a "Connect Twitch" click to Twitch's redirect back.
+   * In memory: one admin, and a restart only means clicking Connect again.
+   */
+  const pendingTwitchStates = new Map<string, number>();
+  function takeTwitchState(state: string | undefined): boolean {
+    for (const [key, expiresAt] of pendingTwitchStates) if (expiresAt < now()) pendingTwitchStates.delete(key);
+    if (state === undefined || !pendingTwitchStates.has(state)) return false;
+    pendingTwitchStates.delete(state);
+    return true;
+  }
+
+  function twitchStatus(): TwitchStatus {
+    if (twitch === undefined) return { state: 'not-configured' };
+    const connection = connections.find('twitch');
+    if (connection === undefined) return { state: 'disconnected' };
+    return connection.status === 'active'
+      ? { state: 'connected', login: connection.accountLogin }
+      : { state: 'revoked', login: connection.accountLogin, reason: connection.statusReason ?? 'unknown' };
+  }
 
   app.register(fastifyCookie);
   app.register(fastifySession, {
@@ -132,11 +178,59 @@ export function registerAdminRoutes(app: FastifyInstance, dependencies: AdminRou
             (scene) => `${config.publicBaseUrl}${overlayPath}/scene/${scene}`,
           ),
           testAlertUrl: `${overlayPath}/test`,
+          twitch: twitchStatus(),
           ...(notice !== undefined && { notice }),
         }),
       );
     },
   );
+
+  if (twitch !== undefined) {
+    const twitchDependencies = {
+      api: twitch.api,
+      connections,
+      callbackUrl: twitch.callbackUrl,
+      eventSubSecret: twitch.eventSubSecret,
+    };
+
+    app.get('/admin/twitch/connect', { preHandler: requireAdmin }, async (_request, reply) => {
+      const state = randomBytes(24).toString('base64url');
+      pendingTwitchStates.set(state, now() + oauthStateLifetimeMs);
+      return reply.redirect(twitch.api.authorizeUrl(twitchRedirectUri, state), 303);
+    });
+
+    // No admin session check here: the session cookie is SameSite and is not
+    // sent on the redirect back from twitch.tv. The single-use state, which only
+    // an admin's Connect click can create, is what proves the request is ours.
+    app.get<{ Querystring: { code?: string; state?: string; error?: string } }>(
+      '/admin/twitch/callback',
+      async (request, reply) => {
+        if (!takeTwitchState(request.query.state)) return reply.redirect('/admin?notice=twitch-expired', 303);
+        if (request.query.error !== undefined || request.query.code === undefined) {
+          return reply.redirect('/admin?notice=twitch-denied', 303);
+        }
+        try {
+          const result = await connectTwitch(twitchDependencies, request.query.code, twitchRedirectUri);
+          request.log.info({ login: result.login, failedTypes: result.failedTypes }, 'Twitch connected');
+          const notice = result.failedTypes.length === 0 ? 'twitch-connected' : 'twitch-partial';
+          return reply.redirect(`/admin?notice=${notice}`, 303);
+        } catch (error) {
+          request.log.error({ err: error }, 'Connecting Twitch failed');
+          return reply.redirect('/admin?notice=twitch-failed', 303);
+        }
+      },
+    );
+
+    app.post('/admin/twitch/disconnect', { preHandler: requireAdmin }, async (request, reply) => {
+      try {
+        await disconnectTwitch(twitchDependencies);
+        return reply.redirect('/admin?notice=twitch-disconnected', 303);
+      } catch (error) {
+        request.log.error({ err: error }, 'Disconnecting Twitch failed');
+        return reply.redirect('/admin?notice=twitch-failed', 303);
+      }
+    });
+  }
 
   app.post<{ Params: { id: string } }>(
     '/admin/donations/:id/replay',
