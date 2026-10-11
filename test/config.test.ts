@@ -4,6 +4,7 @@ import { ConfigError, loadConfig } from '../src/config.ts';
 const minimalEnvironment = {
   PUBLIC_BASE_URL: 'https://dono.example.com',
   NOWPAYMENTS_API_KEY: 'test-api-key',
+  NOWPAYMENTS_IPN_SECRET: 'test-ipn-secret',
 };
 
 function configErrorFor(environment: Record<string, string | undefined>): ConfigError {
@@ -27,11 +28,23 @@ describe('loadConfig', () => {
       streamerName: '',
       nowPayments: {
         apiKey: 'test-api-key',
+        ipnSecret: 'test-ipn-secret',
         baseUrl: 'https://api.nowpayments.io/v1',
         sandbox: false,
       },
+      alertOnStatus: 'confirmed',
       donation: { currency: 'usd', fractionDigits: 2, minAmountMinor: 100, maxAmountMinor: 100000 },
     });
+  });
+
+  it.each(['confirming', 'confirmed', 'finished'])('accepts ALERT_ON_STATUS=%s', (status) => {
+    expect(loadConfig({ ...minimalEnvironment, ALERT_ON_STATUS: status }).alertOnStatus).toBe(status);
+  });
+
+  it.each(['waiting', 'partially_paid', 'FINISHED', 'done'])('rejects ALERT_ON_STATUS=%s', (status) => {
+    expect(configErrorFor({ ...minimalEnvironment, ALERT_ON_STATUS: status }).issues[0]).toMatch(
+      /^ALERT_ON_STATUS: /,
+    );
   });
 
   it('reads explicit values', () => {
@@ -75,6 +88,7 @@ describe('loadConfig', () => {
     expect(configErrorFor({}).issues).toEqual([
       'PUBLIC_BASE_URL is required but not set',
       'NOWPAYMENTS_API_KEY is required but not set',
+      'NOWPAYMENTS_IPN_SECRET is required but not set',
     ]);
   });
 
@@ -119,7 +133,7 @@ describe('loadConfig', () => {
 
   it('reports every problem at once', () => {
     const issues = configErrorFor({ PORT: 'abc', LOG_LEVEL: 'verbose' }).issues;
-    expect(issues).toHaveLength(4);
+    expect(issues).toHaveLength(5);
     expect(issues.join('\n')).toContain('PUBLIC_BASE_URL is required');
     expect(issues.join('\n')).toContain('NOWPAYMENTS_API_KEY is required');
   });

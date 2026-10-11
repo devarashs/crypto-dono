@@ -6,6 +6,7 @@
  * documented list of variables lives in `.env.example`; keep the two in sync.
  */
 import { z } from 'zod';
+import { alertThresholdStatuses, type AlertThresholdStatus } from './donations/payment-status.ts';
 import { currencyFractionDigits, parseAmountToMinorUnits } from './money.ts';
 import { nowPaymentsBaseUrls } from './nowpayments/nowpayments-client.ts';
 
@@ -59,7 +60,13 @@ const environmentSchema = z.object({
   STREAMER_NAME: z.preprocess(emptyAsUnset, z.string().trim().max(60).default('')),
 
   NOWPAYMENTS_API_KEY: z.preprocess(emptyAsUnset, z.string().trim().min(1)),
+  // Signs every IPN; without it any caller could fire alerts on stream.
+  NOWPAYMENTS_IPN_SECRET: z.preprocess(emptyAsUnset, z.string().trim().min(1)),
   NOWPAYMENTS_SANDBOX: z.preprocess(emptyAsUnset, z.stringbool().default(false)),
+  // "confirmed" by default: the blockchain has accepted the payment, so the
+  // money is real. "confirming" alerts sooner, as soon as the transaction is
+  // seen, at the small risk of alerting for one that never confirms.
+  ALERT_ON_STATUS: z.preprocess(emptyAsUnset, z.enum(alertThresholdStatuses).default('confirmed')),
 
   DONATION_CURRENCY: z.preprocess(
     emptyAsUnset,
@@ -87,9 +94,12 @@ export type Config = {
   readonly streamerName: string;
   readonly nowPayments: {
     readonly apiKey: string;
+    readonly ipnSecret: string;
     readonly baseUrl: string;
     readonly sandbox: boolean;
   };
+  /** Payment status from which a donation shows its alert. */
+  readonly alertOnStatus: AlertThresholdStatus;
   readonly donation: {
     /** Lower-case ISO 4217 code. */
     readonly currency: string;
@@ -143,9 +153,11 @@ export function loadConfig(environment: Readonly<Record<string, string | undefin
     streamerName: variables.STREAMER_NAME,
     nowPayments: {
       apiKey: variables.NOWPAYMENTS_API_KEY,
+      ipnSecret: variables.NOWPAYMENTS_IPN_SECRET,
       baseUrl: variables.NOWPAYMENTS_SANDBOX ? nowPaymentsBaseUrls.sandbox : nowPaymentsBaseUrls.production,
       sandbox: variables.NOWPAYMENTS_SANDBOX,
     },
+    alertOnStatus: variables.ALERT_ON_STATUS,
     donation: {
       currency: variables.DONATION_CURRENCY,
       fractionDigits,
