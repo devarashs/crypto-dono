@@ -132,9 +132,14 @@ and Share Tech Mono, hard corners, neon grid and scanlines).
       traffic or the bill ever looks wrong.
       The deploy is reproducible from files in deploy/ and the guide in
       deploy/README.md.
-- [ ] 17. Pushing to main deploys automatically once CI passes: GitHub Actions
+- [x] 17. Pushing to main deploys automatically once CI passes: GitHub Actions
       SSHes in with a deploy key restricted to deploy/update.sh, which backs up,
       fast-forwards, rebuilds, health-checks, and rolls back to the previous
       commit if the new version does not come up healthy.
       Deploy key verified to refuse a shell, file reads and port forwarding; host
       key pinned after matching three sources.
+      Verified 2026-10-11: a docs push deployed in about 5 s on the server; a
+      drill commit that crashed only in production failed its health check and
+      rolled back by itself (about 1 min 40 s of 502s), and the run went red.
+      Known limit: one app container, so a deploy that rebuilds has a short gap
+      and a failed one is down until the rollback finishes.
