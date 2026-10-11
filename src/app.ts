@@ -9,10 +9,12 @@ import formBody from '@fastify/formbody';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { toOverlayAlert, type AlertHub } from './alerts/alert-hub.ts';
 import type { Config } from './config.ts';
-import type { Donation, DonationRepository } from './donations/donation-repository.ts';
+import type { DonationRepository } from './donations/donation-repository.ts';
 import type { NowPaymentsClient } from './nowpayments/nowpayments-client.ts';
 import { registerDonationRoutes, sendHtml } from './routes/donation-routes.ts';
+import { registerOverlayRoutes } from './routes/overlay-routes.ts';
 import { registerWebhookRoutes } from './routes/webhook-routes.ts';
 import { renderErrorPage } from './web/pages.ts';
 
@@ -20,8 +22,8 @@ import { renderErrorPage } from './web/pages.ts';
 export type AppDependencies = {
   readonly donations: DonationRepository;
   readonly nowPayments: NowPaymentsClient;
-  /** Called once per donation, when its payment first reaches the alert threshold. */
-  readonly onDonationAlert: (donation: Donation) => void;
+  /** Receives each donation's alert once, and fans it out to connected overlays. */
+  readonly alertHub: AlertHub;
 };
 
 const publicDirectory = fileURLToPath(new URL('../public/', import.meta.url));
@@ -62,10 +64,18 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
     trustProxy: true,
     // Generous for a three-field form, small enough to refuse junk early.
     bodyLimit: 16 * 1024,
+    // An overlay's event stream never ends by itself, so without this a shutdown
+    // waits on it until Docker gives up and kills the process. The overlay
+    // reconnects on its own once the service is back.
+    forceCloseConnections: true,
   });
 
   app.addHook('onSend', async (_request, reply) => {
-    reply.headers(securityHeaders);
+    // A route that needs a different policy (the overlay runs a script) sets its
+    // own header, which this must not overwrite.
+    const { 'content-security-policy': contentSecurityPolicy, ...otherHeaders } = securityHeaders;
+    if (!reply.hasHeader('content-security-policy')) reply.header('content-security-policy', contentSecurityPolicy);
+    reply.headers(otherHeaders);
   });
 
   app.register(formBody);
@@ -87,7 +97,14 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
     registerDonationRoutes(scope, { config, ...dependencies });
   });
   app.register(async (scope) => {
-    registerWebhookRoutes(scope, { config, ...dependencies });
+    registerWebhookRoutes(scope, {
+      config,
+      donations: dependencies.donations,
+      onDonationAlert: (donation) => dependencies.alertHub.publish(toOverlayAlert(donation)),
+    });
+  });
+  app.register(async (scope) => {
+    registerOverlayRoutes(scope, { config, donations: dependencies.donations, alertHub: dependencies.alertHub });
   });
 
   app.setNotFoundHandler((_request, reply) =>

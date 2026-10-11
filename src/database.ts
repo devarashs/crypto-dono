@@ -62,6 +62,17 @@ export const migrations: readonly Migration[] = [
       ALTER TABLE donations ADD COLUMN alert_triggered_at TEXT;
     `,
   },
+  {
+    version: 3,
+    description: 'Record when an overlay finished showing an alert',
+    sql: `
+      -- Triggered but not yet shown means an overlay missed it (OBS closed, a
+      -- reconnect), so it is replayed when an overlay next connects.
+      ALTER TABLE donations ADD COLUMN alert_shown_at TEXT;
+      CREATE INDEX donations_pending_alerts ON donations (alert_triggered_at)
+        WHERE alert_triggered_at IS NOT NULL AND alert_shown_at IS NULL;
+    `,
+  },
 ];
 
 /** The schema version a freshly opened database ends up at. */

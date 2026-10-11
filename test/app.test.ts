@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import { createAlertHub } from '../src/alerts/alert-hub.ts';
 import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
 import { openDatabase } from '../src/database.ts';
@@ -28,6 +29,7 @@ function buildTestApp(
   const config = loadConfig({
     PUBLIC_BASE_URL: 'https://dono.example.com',
     NOWPAYMENTS_API_KEY: 'test-key',
+    OVERLAY_TOKEN: 'overlay-token-for-tests-0123456789',
     NOWPAYMENTS_IPN_SECRET: 'test-ipn-secret',
     LOG_LEVEL: 'fatal',
     STREAMER_NAME: 'Arash',
@@ -36,7 +38,7 @@ function buildTestApp(
   const donations = createDonationRepository(openDatabase(':memory:'));
   const createInvoice = vi.fn<NowPaymentsClient['createInvoice']>(createInvoiceImplementation);
   return {
-    app: buildApp(config, { donations, nowPayments: { createInvoice }, onDonationAlert: () => {} }),
+    app: buildApp(config, { donations, nowPayments: { createInvoice }, alertHub: createAlertHub() }),
     donations,
     createInvoice,
   };

@@ -195,3 +195,60 @@ describe('applyPaymentUpdate', () => {
     expect(retried).toMatchObject({ donation: { nowpaymentsPaymentId: 'pay_2', payCurrency: 'trx' } });
   });
 });
+
+describe('pending alerts', () => {
+  let database: Database;
+  let clock: Date;
+  let repository: DonationRepository;
+
+  function triggeredDonation(donorName: string, at: string): string {
+    clock = new Date(at);
+    const { publicId } = repository.create({ ...newDonation, donorName });
+    repository.applyPaymentUpdate(
+      publicId,
+      { status: 'finished', paymentId: `pay_${donorName}`, invoiceId: null, payCurrency: 'ltc', actuallyPaid: '1' },
+      'confirmed',
+    );
+    return publicId;
+  }
+
+  beforeEach(() => {
+    database = openDatabase(':memory:');
+    clock = fixedNow;
+    repository = createDonationRepository(database, () => clock);
+  });
+
+  it('lists triggered, unshown alerts oldest first', () => {
+    triggeredDonation('Second', '2026-10-11T12:02:00.000Z');
+    triggeredDonation('First', '2026-10-11T12:01:00.000Z');
+    repository.create({ ...newDonation, donorName: 'Unpaid' });
+    expect(repository.listPendingAlerts('2026-10-11T00:00:00.000Z').map((d) => d.donorName)).toEqual([
+      'First',
+      'Second',
+    ]);
+  });
+
+  it('leaves out alerts triggered before the cut-off', () => {
+    triggeredDonation('Old', '2026-10-09T12:00:00.000Z');
+    triggeredDonation('Recent', '2026-10-11T12:00:00.000Z');
+    expect(repository.listPendingAlerts('2026-10-10T12:00:00.000Z').map((d) => d.donorName)).toEqual([
+      'Recent',
+    ]);
+  });
+
+  it('marks an alert shown once and removes it from the pending list', () => {
+    const publicId = triggeredDonation('Ann', '2026-10-11T12:00:00.000Z');
+    clock = new Date('2026-10-11T12:00:09.000Z');
+    expect(repository.markAlertShown(publicId)).toBe(true);
+    expect(repository.markAlertShown(publicId)).toBe(false);
+    expect(repository.findByPublicId(publicId)?.alertShownAt).toBe('2026-10-11T12:00:09.000Z');
+    expect(repository.listPendingAlerts('2026-10-11T00:00:00.000Z')).toEqual([]);
+  });
+
+  it('refuses to mark a donation that never triggered an alert, or an unknown id', () => {
+    const { publicId } = repository.create(newDonation);
+    expect(repository.markAlertShown(publicId)).toBe(false);
+    expect(repository.markAlertShown('unknown')).toBe(false);
+    expect(repository.findByPublicId(publicId)?.alertShownAt).toBeNull();
+  });
+});

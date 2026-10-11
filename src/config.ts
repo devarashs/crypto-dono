@@ -67,6 +67,18 @@ const environmentSchema = z.object({
   // money is real. "confirming" alerts sooner, as soon as the transaction is
   // seen, at the small risk of alerting for one that never confirms.
   ALERT_ON_STATUS: z.preprocess(emptyAsUnset, z.enum(alertThresholdStatuses).default('confirmed')),
+  // The overlay URL is the only thing protecting the alert feed, so it must be
+  // long and random, not a memorable word.
+  OVERLAY_TOKEN: z.preprocess(
+    emptyAsUnset,
+    z
+      .string()
+      .regex(
+        /^[A-Za-z0-9_-]{24,}$/,
+        'must be at least 24 random letters, digits, "-" or "_". Generate one with: ' +
+          `node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"`,
+      ),
+  ),
 
   DONATION_CURRENCY: z.preprocess(
     emptyAsUnset,
@@ -100,6 +112,8 @@ export type Config = {
   };
   /** Payment status from which a donation shows its alert. */
   readonly alertOnStatus: AlertThresholdStatus;
+  /** Secret path segment of the OBS overlay URL. */
+  readonly overlayToken: string;
   readonly donation: {
     /** Lower-case ISO 4217 code. */
     readonly currency: string;
@@ -158,6 +172,7 @@ export function loadConfig(environment: Readonly<Record<string, string | undefin
       sandbox: variables.NOWPAYMENTS_SANDBOX,
     },
     alertOnStatus: variables.ALERT_ON_STATUS,
+    overlayToken: variables.OVERLAY_TOKEN,
     donation: {
       currency: variables.DONATION_CURRENCY,
       fractionDigits,

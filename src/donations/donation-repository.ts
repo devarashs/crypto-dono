@@ -35,6 +35,8 @@ export type Donation = {
   readonly actuallyPaid: string | null;
   /** When the alert was triggered; `null` until the payment crossed the threshold. */
   readonly alertTriggeredAt: string | null;
+  /** When an overlay reported the alert as shown; `null` while it is pending. */
+  readonly alertShownAt: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
 };
@@ -76,6 +78,7 @@ type DonationRow = {
   pay_currency: string | null;
   actually_paid: string | null;
   alert_triggered_at: string | null;
+  alert_shown_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -98,6 +101,16 @@ export function createDonationRepository(database: Database, now: () => Date = (
     SET status = ?, nowpayments_payment_id = ?, pay_currency = ?, actually_paid = ?,
         alert_triggered_at = COALESCE(alert_triggered_at, ?), updated_at = ?
     WHERE public_id = ?
+    RETURNING *
+  `);
+  const listPendingAlertsStatement = database.prepare(`
+    SELECT * FROM donations
+    WHERE alert_triggered_at IS NOT NULL AND alert_shown_at IS NULL AND alert_triggered_at >= ?
+    ORDER BY alert_triggered_at, id
+  `);
+  const markAlertShownStatement = database.prepare(`
+    UPDATE donations SET alert_shown_at = ?, updated_at = ?
+    WHERE public_id = ? AND alert_triggered_at IS NOT NULL AND alert_shown_at IS NULL
     RETURNING *
   `);
   const setInvoiceStatement = database.prepare(`
@@ -180,6 +193,27 @@ export function createDonationRepository(database: Database, now: () => Date = (
       });
     },
 
+    /**
+     * Alerts that were triggered but never reported as shown, oldest first.
+     *
+     * @param triggeredSince ISO timestamp; older pending alerts are left out so an
+     *   overlay opened after a long gap does not replay a backlog of stale alerts.
+     */
+    listPendingAlerts(triggeredSince: string): Donation[] {
+      return (listPendingAlertsStatement.all(triggeredSince) as DonationRow[]).map(toDonation);
+    },
+
+    /**
+     * Records that an overlay finished showing the alert.
+     *
+     * @returns True the first time; false if the alert was already marked, was
+     *   never triggered, or the id is unknown. Safe to call repeatedly.
+     */
+    markAlertShown(publicId: string): boolean {
+      const timestamp = now().toISOString();
+      return markAlertShownStatement.get(timestamp, timestamp, publicId) !== undefined;
+    },
+
     /** @returns The updated donation, or `undefined` if no donation has that id. */
     setInvoiceId(publicId: string, invoiceId: string): Donation | undefined {
       const row = setInvoiceStatement.get(invoiceId, now().toISOString(), publicId) as
@@ -209,6 +243,7 @@ function toDonation(row: DonationRow): Donation {
     payCurrency: row.pay_currency,
     actuallyPaid: row.actually_paid,
     alertTriggeredAt: row.alert_triggered_at,
+    alertShownAt: row.alert_shown_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
