@@ -1,0 +1,27 @@
+{
+  "name": "crypto-dono",
+  "version": "0.1.0",
+  "description": "Self-hosted crypto donations for live streams, with OBS alerts, powered by NOWPayments.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/server.ts",
+    "dev": "node --env-file-if-exists=.env --watch src/server.ts",
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "fastify": "^5.12.5",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}
