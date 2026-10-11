@@ -34,8 +34,10 @@ Each can be revisited; none is load-bearing enough to block work.
 
 ## Phase 1 — Money path
 
-- [ ] 3. A viewer can donate: the donation page creates a NOWPayments invoice and
+- [x] 3. A viewer can donate: the donation page creates a NOWPayments invoice and
       redirects to its checkout. Validated, minimum enforced, rate-limited.
+      Note: per-coin minimums are enforced by NOWPayments' checkout, not by us; the
+      donor picks the coin there. DONATION_MIN_AMOUNT is our own floor.
 - [ ] 4. A confirmed payment is recorded exactly once: the IPN webhook verifies the
       HMAC-SHA512 signature, updates status idempotently, and triggers an alert on the
       status chosen by `ALERT_ON_STATUS`. Signature scheme verified against a real
