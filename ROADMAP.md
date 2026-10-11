@@ -132,3 +132,7 @@ and Share Tech Mono, hard corners, neon grid and scanlines).
       traffic or the bill ever looks wrong.
       The deploy is reproducible from files in deploy/ and the guide in
       deploy/README.md.
+- [ ] 17. Pushing to main deploys automatically once CI passes: GitHub Actions
+      SSHes in with a deploy key restricted to deploy/update.sh, which backs up,
+      fast-forwards, rebuilds, health-checks, and rolls back to the previous
+      commit if the new version does not come up healthy.
