@@ -58,6 +58,12 @@ Each can be revisited; none is load-bearing enough to block work.
 - [ ] 7. The streamer can restyle alerts (sound, image, duration, template) without
       touching code.
 - [ ] 8. Donation messages are read aloud (design per item 5).
+      Decided 2026-10-11: server-side synthesis with Piper, so speech flows through
+      the overlay's own audio and therefore through OBS's mixer. Piper runs as a
+      separate, optional compose service reached over HTTP (TTS_URL): its engine is
+      GPL-3 (piper1-gpl) and voices carry per-model licences, so it is not bundled
+      into this MIT image. Check the chosen voice's model card licence. No TTS_URL
+      means messages are shown but not spoken.
 - [ ] 9. Messages are filtered: maximum length, banned words, minimum amounts to show
       a message and to read it aloud.
 
