@@ -82,8 +82,11 @@ Each can be revisited; none is load-bearing enough to block work.
 
 ## Phase 3 — Admin
 
-- [ ] 10. The streamer can manage alerts from a password-protected admin page:
+- [x] 10. The streamer can manage alerts from a password-protected admin page:
       donation history, replay or skip. (Test alerts moved to item 6a.)
+      Verified in Chromium (sign-in, history, skipping an alert on screen, replaying
+      the same alert twice on one overlay connection) and in Docker (session secret
+      created as the node user, sign-in, persistence across restart).
 
 ## Phase 4 — Open-source release
 

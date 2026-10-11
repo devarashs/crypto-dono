@@ -162,6 +162,24 @@ describe('overlay routes', () => {
       ]);
     });
 
+    it('delivers a deliberate replay of an alert this connection already received', async () => {
+      const id = paidDonation('Again');
+      const stream = await openEventStream();
+      await stream.waitFor('Again');
+      alertHub.publish({ id, donorName: 'Again', message: '', amount: '$5.00', speak: false, replay: true });
+      alertHub.publish({ id: 'marker', donorName: 'Marker', message: '', amount: '$1.00', speak: false });
+      await stream.waitFor('Marker');
+      expect(parseAlerts(stream.text()).map((alert) => alert.donorName)).toEqual(['Again', 'Again', 'Marker']);
+    });
+
+    it('forwards skips to the overlay', async () => {
+      const stream = await openEventStream();
+      await stream.waitFor('retry:');
+      alertHub.skip('skip-me');
+      await stream.waitFor('skip-me');
+      expect(stream.text()).toContain('event: skip\ndata: {"id":"skip-me"}\n\n');
+    });
+
     it('does not replay alerts already shown', async () => {
       const shown = paidDonation('Shown');
       donations.markAlertShown(shown);

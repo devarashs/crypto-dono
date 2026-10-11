@@ -252,3 +252,58 @@ describe('pending alerts', () => {
     expect(repository.findByPublicId(publicId)?.alertShownAt).toBeNull();
   });
 });
+
+describe('listPage', () => {
+  let repository: DonationRepository;
+  const paid: string[] = [];
+
+  beforeEach(() => {
+    repository = createDonationRepository(openDatabase(':memory:'), () => fixedNow);
+    paid.length = 0;
+    for (let index = 1; index <= 7; index += 1) {
+      const { publicId } = repository.create({ ...newDonation, donorName: `Donor ${index}` });
+      // Odd donations paid, even ones abandoned at checkout.
+      if (index % 2 === 1) {
+        repository.applyPaymentUpdate(
+          publicId,
+          { status: 'finished', paymentId: `p${index}`, invoiceId: null, payCurrency: 'ltc', actuallyPaid: '1' },
+          'confirmed',
+        );
+        paid.push(`Donor ${index}`);
+      }
+    }
+  });
+
+  it('pages through everything newest first, ending with no next cursor', () => {
+    const first = repository.listPage({ paidOnly: false, limit: 3 });
+    expect(first.donations.map((d) => d.donorName)).toEqual(['Donor 7', 'Donor 6', 'Donor 5']);
+    expect(first.nextBeforeId).not.toBeNull();
+
+    const second = repository.listPage({ paidOnly: false, limit: 3, beforeId: first.nextBeforeId ?? 0 });
+    expect(second.donations.map((d) => d.donorName)).toEqual(['Donor 4', 'Donor 3', 'Donor 2']);
+
+    const last = repository.listPage({ paidOnly: false, limit: 3, beforeId: second.nextBeforeId ?? 0 });
+    expect(last.donations.map((d) => d.donorName)).toEqual(['Donor 1']);
+    expect(last.nextBeforeId).toBeNull();
+  });
+
+  it('can list only paid donations', () => {
+    const page = repository.listPage({ paidOnly: true, limit: 10 });
+    expect(page.donations.map((d) => d.donorName)).toEqual([...paid].reverse());
+    expect(page.nextBeforeId).toBeNull();
+  });
+
+  it('reports no next page when the last page is exactly full', () => {
+    expect(repository.listPage({ paidOnly: true, limit: 4 }).nextBeforeId).toBeNull();
+  });
+
+  it('clamps the page size', () => {
+    expect(repository.listPage({ paidOnly: false, limit: 0 }).donations).toHaveLength(1);
+    expect(repository.listPage({ paidOnly: false, limit: 10_000 }).donations).toHaveLength(7);
+  });
+
+  it('returns an empty page for an empty database', () => {
+    const empty = createDonationRepository(openDatabase(':memory:'));
+    expect(empty.listPage({ paidOnly: false, limit: 10 })).toEqual({ donations: [], nextBeforeId: null });
+  });
+});

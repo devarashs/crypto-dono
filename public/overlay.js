@@ -34,9 +34,12 @@ const queue = [];
 /** Ids already queued or shown, so a replay after reconnect is not shown twice. */
 const seenIds = new Set();
 let isPlaying = false;
+/** The alert on screen, with a function that cuts it short. */
+let current = null;
 
 function enqueue(alert) {
-  if (seenIds.has(alert.id)) return;
+  // A deliberate replay from the admin page is shown even if this id was seen.
+  if (seenIds.has(alert.id) && alert.replay !== true) return;
   seenIds.add(alert.id);
   queue.push(alert);
   if (!isPlaying) void playQueue();
@@ -54,6 +57,18 @@ async function playQueue() {
 }
 
 async function showAlert(alert) {
+  let skip;
+  const skipped = new Promise((resolve) => {
+    skip = resolve;
+  });
+  current = { id: alert.id, skip };
+  /** Waits, unless the streamer skips this alert first. */
+  const waitUnlessSkipped = (milliseconds) => Promise.race([wait(milliseconds), skipped]);
+  let wasSkipped = false;
+  void skipped.then(() => {
+    wasSkipped = true;
+  });
+
   const card = renderCard(alert);
   stage.replaceChildren(card);
   // Forces a style flush so the transition runs from the hidden state.
@@ -64,13 +79,16 @@ async function showAlert(alert) {
   // The server decides per alert (e.g. below TTS_MIN_AMOUNT it is not spoken).
   const spoken = speechEnabled && alert.speak === true;
   if (spoken) {
-    await wait(speechDelayMs);
-    await speak(alert.id);
+    await waitUnlessSkipped(speechDelayMs);
+    if (!wasSkipped) await speak(alert.id, skipped);
   }
-  // At least the configured duration, longer if the speech ran past it.
-  const elapsedMs = performance.now() - shownAt;
-  const visibleMs = Math.max(alertDurationMs, spoken ? elapsedMs + holdAfterSpeechMs : 0);
-  await wait(visibleMs - elapsedMs);
+  if (!wasSkipped) {
+    // At least the configured duration, longer if the speech ran past it.
+    const elapsedMs = performance.now() - shownAt;
+    const visibleMs = Math.max(alertDurationMs, spoken ? elapsedMs + holdAfterSpeechMs : 0);
+    await waitUnlessSkipped(visibleMs - elapsedMs);
+  }
+  current = null;
   card.classList.remove('is-visible');
   await wait(exitDurationMs);
   card.remove();
@@ -167,13 +185,17 @@ function playChime() {
  * resolves on any failure (Piper down, unknown alert, blocked autoplay), because
  * a missing voice must never hold up the alert queue.
  */
-function speak(alertId) {
+function speak(alertId, skipped) {
   const audio = new Audio(new URL(`alerts/${encodeURIComponent(alertId)}/speech`, eventsUrl).href);
   return new Promise((resolve) => {
     const finish = () => {
       clearTimeout(safetyTimer);
       resolve();
     };
+    void skipped.then(() => {
+      audio.pause();
+      finish();
+    });
     const safetyTimer = setTimeout(finish, maximumSpeechMs);
     audio.addEventListener('ended', finish, { once: true });
     audio.addEventListener('error', finish, { once: true });
@@ -186,6 +208,19 @@ function wait(milliseconds) {
 }
 
 const events = new EventSource(eventsUrl);
+/** The streamer skipped an alert from the admin page: drop it if queued, end it if showing. */
+events.addEventListener('skip', (event) => {
+  try {
+    const { id } = JSON.parse(event.data);
+    seenIds.add(id);
+    const queuedIndex = queue.findIndex((alert) => alert.id === id);
+    if (queuedIndex !== -1) queue.splice(queuedIndex, 1);
+    if (current !== null && current.id === id) current.skip();
+  } catch {
+    // A malformed event is ignored.
+  }
+});
+
 events.addEventListener('alert', (event) => {
   try {
     enqueue(JSON.parse(event.data));

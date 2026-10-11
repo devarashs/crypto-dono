@@ -43,6 +43,7 @@ describe('loadConfig', () => {
         sound: { kind: 'chime' },
         imageFileName: null,
       },
+      adminPassword: null,
       filters: { messageMaxLength: 300, bannedWords: [], messageMinAmountMinor: 0, speechMinAmountMinor: 0 },
       tts: null,
       donation: { currency: 'usd', fractionDigits: 2, minAmountMinor: 100, maxAmountMinor: 100000 },
@@ -244,6 +245,17 @@ describe('loadConfig', () => {
       expect(
         configErrorFor({ ...minimalEnvironment, DONATION_MIN_AMOUNT: 'x', DONATION_MAX_AMOUNT: 'y' }).issues,
       ).toHaveLength(2);
+    });
+  });
+
+  describe('ADMIN_PASSWORD', () => {
+    it('keeps the password exactly, including surrounding spaces', () => {
+      expect(loadConfig({ ...minimalEnvironment, ADMIN_PASSWORD: ' twelve chars ' }).adminPassword).toBe(' twelve chars ');
+    });
+
+    it('rejects a password under 12 characters, without echoing it', () => {
+      const issues = configErrorFor({ ...minimalEnvironment, ADMIN_PASSWORD: 'short-pass1' }).issues;
+      expect(issues).toEqual(['ADMIN_PASSWORD: must be at least 12 characters']);
     });
   });
 

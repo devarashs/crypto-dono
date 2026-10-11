@@ -54,3 +54,32 @@ describe('createAlertHub', () => {
     expect(hub.subscriberCount).toBe(1);
   });
 });
+
+describe('skips', () => {
+  it('delivers skips to skip listeners only, until unsubscribed', () => {
+    const hub = createAlertHub();
+    const onSkip = vi.fn();
+    const onAlert = vi.fn();
+    const unsubscribe = hub.subscribeToSkips(onSkip);
+    hub.subscribe(onAlert);
+    hub.skip('a1');
+    expect(onSkip).toHaveBeenCalledWith('a1');
+    expect(onAlert).not.toHaveBeenCalled();
+    unsubscribe();
+    hub.skip('a2');
+    expect(onSkip).toHaveBeenCalledOnce();
+  });
+
+  it('isolates a failing skip listener', () => {
+    const onListenerError = vi.fn();
+    const hub = createAlertHub(onListenerError);
+    const healthy = vi.fn();
+    hub.subscribeToSkips(() => {
+      throw new Error('closed');
+    });
+    hub.subscribeToSkips(healthy);
+    hub.skip('a1');
+    expect(healthy).toHaveBeenCalledWith('a1');
+    expect(onListenerError).toHaveBeenCalledOnce();
+  });
+});
