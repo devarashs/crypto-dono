@@ -15,5 +15,19 @@ services:
       # service never writes here.
       - ./custom:/app/custom:ro
 
+  # Optional text-to-speech. Started only with: docker compose --profile tts up
+  # and used once .env has TTS_URL=http://piper:5000. Not published on a host
+  # port: only crypto-dono talks to it, over the compose network.
+  piper:
+    build: ./piper
+    profiles: ["tts"]
+    restart: unless-stopped
+    environment:
+      # Check the voice's MODEL_CARD licence before choosing another one.
+      PIPER_VOICE: ${PIPER_VOICE:-en_US-ljspeech-medium}
+    volumes:
+      - piper-voices:/voices
+
 volumes:
   crypto-dono-data:
+  piper-voices:
