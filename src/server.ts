@@ -21,10 +21,25 @@ function loadConfigOrExit() {
   }
 }
 
+function openDatabaseOrExit(path: string) {
+  try {
+    return openDatabase(path);
+  } catch (error) {
+    // By far the commonest cause is a mounted directory the container user
+    // cannot write, so name it rather than leave a bare SQLite error code.
+    console.error(
+      `Cannot open the database at ${path}: ${error instanceof Error ? error.message : String(error)}\n\n` +
+        'Check that its directory exists and is writable by the user running this service ' +
+        '(in Docker, the "node" user, uid 1000).',
+    );
+    process.exit(1);
+  }
+}
+
 const config = loadConfigOrExit();
 // Opened, and migrated, before listening: a schema problem should stop the boot,
 // not surface as a failed donation.
-const database = openDatabase(config.databasePath);
+const database = openDatabaseOrExit(config.databasePath);
 const app = buildApp(config, { donations: createDonationRepository(database) });
 app.addHook('onClose', async () => {
   database.close();
