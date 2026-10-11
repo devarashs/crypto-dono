@@ -128,6 +128,9 @@ export function registerAdminRoutes(app: FastifyInstance, dependencies: AdminRou
           showUnpaid,
           overlayUrl: `${config.publicBaseUrl}${overlayPath}`,
           boardUrl: `${config.publicBaseUrl}${overlayPath}/board`,
+          sceneUrls: ['starting-soon?minutes=5', 'brb', 'ending-soon'].map(
+            (scene) => `${config.publicBaseUrl}${overlayPath}/scene/${scene}`,
+          ),
           testAlertUrl: `${overlayPath}/test`,
           ...(notice !== undefined && { notice }),
         }),
