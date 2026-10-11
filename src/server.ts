@@ -5,6 +5,8 @@
 import { buildApp } from './app.ts';
 import { ConfigError, loadConfig } from './config.ts';
 import { openDatabase } from './database.ts';
+import { join, dirname } from 'node:path';
+import { loadOrCreateSessionSecret } from './admin/admin-auth.ts';
 import { createAlertHub } from './alerts/alert-hub.ts';
 import { createAlertSpeech } from './tts/alert-speech.ts';
 import { createPiperClient } from './tts/piper-client.ts';
@@ -50,6 +52,10 @@ const app = buildApp(config, {
     apiKey: config.nowPayments.apiKey,
     baseUrl: config.nowPayments.baseUrl,
   }),
+  // Next to the database, so it lives in the same persistent volume.
+  ...(config.adminPassword !== null && {
+    adminSessionSecret: loadOrCreateSessionSecret(join(dirname(config.databasePath), 'session-secret')),
+  }),
   alertHub: createAlertHub((error) => app.log.error({ err: error }, 'An overlay listener failed')),
   ...(config.tts !== null && {
     alertSpeech: createAlertSpeech({
@@ -80,3 +86,4 @@ app.log.info(`Public address: ${config.publicBaseUrl}`);
 app.log.info(`Database: ${config.databasePath}`);
 app.log.info(`NOWPayments: ${config.nowPayments.sandbox ? 'sandbox' : 'production'}`);
 app.log.info(`Text-to-speech: ${config.tts === null ? 'off' : config.tts.url}`);
+app.log.info(`Admin page: ${config.adminPassword === null ? 'off (set ADMIN_PASSWORD)' : '/admin'}`);

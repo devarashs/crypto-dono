@@ -221,7 +221,7 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
 
     const sentIds = new Set<string>();
     const send = (alert: OverlayAlert) => {
-      if (sentIds.has(alert.id)) return;
+      if (sentIds.has(alert.id) && alert.replay !== true) return;
       sentIds.add(alert.id);
       response.write(`id: ${alert.id}\nevent: alert\ndata: ${JSON.stringify(alert)}\n\n`);
     };
@@ -229,6 +229,9 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
     // Subscribed before the backlog query, so an alert arriving in between is not
     // missed; `sentIds` stops it being sent twice.
     const unsubscribe = alertHub.subscribe(send);
+    const unsubscribeSkips = alertHub.subscribeToSkips((alertId) => {
+      response.write(`event: skip\ndata: ${JSON.stringify({ id: alertId })}\n\n`);
+    });
     const replayCutoff = new Date(now().getTime() - alertReplayWindowMs).toISOString();
     for (const donation of donations.listPendingAlerts(replayCutoff)) {
       send(presentAlert(donationToAlertSource(donation)).alert);
@@ -240,6 +243,7 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
     request.raw.on('close', () => {
       clearInterval(heartbeat);
       unsubscribe();
+      unsubscribeSkips();
       request.log.info({ subscribers: alertHub.subscriberCount }, 'Overlay disconnected');
     });
   }

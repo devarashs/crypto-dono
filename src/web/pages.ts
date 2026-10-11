@@ -6,7 +6,10 @@ import type { DonationFormErrors, DonationFormValues } from '../donations/donati
 import { formatMoneyForDisplay } from '../money.ts';
 import { html, type SafeHtml } from './html.ts';
 
-function layout(title: string, content: SafeHtml): SafeHtml {
+/**
+ * @param options.wide A wider column, for the admin history list.
+ */
+export function layout(title: string, content: SafeHtml, options: { wide?: boolean } = {}): SafeHtml {
   return html`<!doctype html>
 <html lang="en">
   <head>
@@ -16,7 +19,7 @@ function layout(title: string, content: SafeHtml): SafeHtml {
     <link rel="stylesheet" href="/static/styles.css">
   </head>
   <body>
-    <main class="card">${content}</main>
+    <main class="card${options.wide === true ? ' card-wide' : ''}">${content}</main>
   </body>
 </html>`;
 }
@@ -90,7 +93,7 @@ function messageHint(model: DonationPageModel): string {
   return `${length} Shown on stream for donations of ${formatMoneyForDisplay(model.messageMinAmountMinor, model.currency)} or more.`;
 }
 
-type FieldModel = {
+export type FieldModel = {
   readonly id: string;
   readonly label: string;
   readonly optional?: boolean;
@@ -99,7 +102,7 @@ type FieldModel = {
   readonly control: SafeHtml;
 };
 
-function renderField(field: FieldModel): SafeHtml {
+export function renderField(field: FieldModel): SafeHtml {
   return html`<div class="field">
     <label for="${field.id}">${field.label}${field.optional === true && html` <span class="optional">(optional)</span>`}</label>
     ${field.control}

@@ -14,6 +14,7 @@ import { createAlertPresenter, donationToAlertSource, type PresentedAlert } from
 import type { Config } from './config.ts';
 import type { DonationRepository } from './donations/donation-repository.ts';
 import type { NowPaymentsClient } from './nowpayments/nowpayments-client.ts';
+import { registerAdminRoutes } from './routes/admin-routes.ts';
 import { registerDonationRoutes, sendHtml } from './routes/donation-routes.ts';
 import { registerOverlayRoutes } from './routes/overlay-routes.ts';
 import { registerWebhookRoutes } from './routes/webhook-routes.ts';
@@ -28,6 +29,8 @@ export type AppDependencies = {
   readonly alertHub: AlertHub;
   /** Speech for alerts; omitted when text-to-speech is not configured. */
   readonly alertSpeech?: AlertSpeech;
+  /** Signs admin session cookies; required when ADMIN_PASSWORD is set. */
+  readonly adminSessionSecret?: string;
 };
 
 const publicDirectory = fileURLToPath(new URL('../public/', import.meta.url));
@@ -138,6 +141,24 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
       ...(dependencies.alertSpeech !== undefined && { alertSpeech: dependencies.alertSpeech }),
     });
   });
+
+  const { adminPassword } = config;
+  if (adminPassword !== null) {
+    if (dependencies.adminSessionSecret === undefined) {
+      throw new Error('ADMIN_PASSWORD is set but no admin session secret was provided');
+    }
+    const sessionSecret = dependencies.adminSessionSecret;
+    app.register(async (scope) => {
+      registerAdminRoutes(scope, {
+        config: { ...config, adminPassword },
+        donations: dependencies.donations,
+        alertHub: dependencies.alertHub,
+        presentAlert,
+        publishAlert,
+        sessionSecret,
+      });
+    });
+  }
 
   app.setNotFoundHandler((_request, reply) =>
     sendHtml(reply, 404, renderErrorPage('Page not found', 'There is nothing at this address.')),
