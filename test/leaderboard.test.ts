@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { openDatabase, type Database } from '../src/database.ts';
 import { createDonationRepository, type DonationRepository, type DonationStatus } from '../src/donations/donation-repository.ts';
 import {
+  biggestSql,
   createLeaderboardQueries,
   recentSql,
   topDonorsSql,
@@ -108,6 +109,46 @@ describe('leaderboard queries', () => {
 
     it('is empty with no donations', () => {
       expect(leaderboard.topDonors('usd', 100)).toEqual([]);
+    });
+  });
+
+  describe('biggest', () => {
+    it('lists single donations by size, not totals per name, Anonymous included', () => {
+      donate('Ann', 500);
+      donate('Ann', 600);
+      donate('Anonymous', 2000);
+      donate('Bo', 900);
+      expect(leaderboard.biggest('usd', 10)).toEqual([
+        { donorName: 'Anonymous', amountMinor: 2000 },
+        { donorName: 'Bo', amountMinor: 900 },
+        { donorName: 'Ann', amountMinor: 600 },
+        { donorName: 'Ann', amountMinor: 500 },
+      ]);
+    });
+
+    it('applies the same rules as the public leaderboard', () => {
+      donate('Unpaid', 9000, { status: 'unpaid' });
+      donate('Refunded', 9000, { status: 'refunded' });
+      donate('Hidden', 9000, { listed: false });
+      donate('Euro', 9000, { currency: 'eur' });
+      donate('Counted', 100);
+      expect(leaderboard.biggest('usd', 10).map((row) => row.donorName)).toEqual(['Counted']);
+    });
+
+    it('keeps the earlier donation ahead on a tie, and respects the limit', () => {
+      donate('First', 500, { at: '2026-10-02T00:00:00.000Z' });
+      donate('Second', 500, { at: '2026-10-03T00:00:00.000Z' });
+      donate('Small', 100, { at: '2026-10-04T00:00:00.000Z' });
+      expect(leaderboard.biggest('usd', 2).map((row) => row.donorName)).toEqual(['First', 'Second']);
+    });
+
+    it('reads the top straight off an index, without sorting', () => {
+      const plan = database
+        .prepare(`EXPLAIN QUERY PLAN ${biggestSql}`)
+        .all({ currency: 'usd', limit: 10 }) as { detail: string }[];
+      const details = plan.map((step) => step.detail).join('\n');
+      expect(details).toContain('donations_biggest');
+      expect(details).not.toContain('TEMP B-TREE');
     });
   });
 

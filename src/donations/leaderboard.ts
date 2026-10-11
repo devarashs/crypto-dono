@@ -29,6 +29,12 @@ export type RecentDonation = {
   readonly donatedAt: string;
 };
 
+/** One donation as shown in the on-stream table of biggest donations. */
+export type BigDonation = {
+  readonly donorName: string;
+  readonly amountMinor: number;
+};
+
 export type LeaderboardQueries = ReturnType<typeof createLeaderboardQueries>;
 
 /** The rows a public list may show; the same rule in both queries. */
@@ -71,9 +77,23 @@ export const recentSql = `
     LIMIT :limit
 `;
 
+/**
+ * Largest single donations through the donations_biggest index. Ties go to the
+ * earlier donation, so a newcomer has to beat an amount, not just match it.
+ * Exported for the plan test.
+ */
+export const biggestSql = `
+    SELECT donor_name, amount_minor
+    FROM donations
+    WHERE ${listedPaidDonations}
+    ORDER BY amount_minor DESC, alert_triggered_at ASC
+    LIMIT :limit
+`;
+
 export function createLeaderboardQueries(database: Database) {
   const topDonorsStatement = database.prepare(topDonorsSql);
   const recentStatement = database.prepare(recentSql);
+  const biggestStatement = database.prepare(biggestSql);
 
   return {
     /** Highest totals per donor name, at most `limit` rows. */
@@ -94,6 +114,15 @@ export function createLeaderboardQueries(database: Database) {
         donationCount: row.donation_count,
         lastDonatedAt: row.last_donated_at,
       }));
+    },
+
+    /** Largest single counted donations, at most `limit` rows. Anonymous included. */
+    biggest(currency: string, limit: number): BigDonation[] {
+      const rows = biggestStatement.all({ currency, limit: clampLimit(limit) }) as {
+        donor_name: string;
+        amount_minor: number;
+      }[];
+      return rows.map((row) => ({ donorName: row.donor_name, amountMinor: row.amount_minor }));
     },
 
     /** Latest counted donations, newest first, at most `limit` rows. Anonymous included. */
