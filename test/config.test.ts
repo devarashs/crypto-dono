@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ConfigError, loadConfig } from '../src/config.ts';
 
@@ -35,6 +36,13 @@ describe('loadConfig', () => {
       },
       alertOnStatus: 'confirmed',
       overlayToken: 'overlay-token-for-tests-0123456789',
+      alert: {
+        durationMs: 8000,
+        textTemplate: '{name} donated {amount}',
+        assetsDirectory: resolve('custom'),
+        sound: { kind: 'chime' },
+        imageFileName: null,
+      },
       donation: { currency: 'usd', fractionDigits: 2, minAmountMinor: 100, maxAmountMinor: 100000 },
     });
   });
@@ -234,6 +242,82 @@ describe('loadConfig', () => {
       expect(
         configErrorFor({ ...minimalEnvironment, DONATION_MIN_AMOUNT: 'x', DONATION_MAX_AMOUNT: 'y' }).issues,
       ).toHaveLength(2);
+    });
+  });
+
+  describe('alert customisation', () => {
+    const existing = new Set([resolve('custom', 'cash.mp3'), resolve('custom', 'party.gif'), resolve('/srv/assets', 'ding.ogg')]);
+    const fileExists = (path: string) => existing.has(path);
+    const load = (overrides: Record<string, string>) => loadConfig({ ...minimalEnvironment, ...overrides }, fileExists);
+    const issuesFor = (overrides: Record<string, string>) => {
+      try {
+        load(overrides);
+      } catch (error) {
+        if (error instanceof ConfigError) return error.issues;
+        throw error;
+      }
+      throw new Error('expected a ConfigError');
+    };
+
+    it('reads duration, template, sound and image', () => {
+      expect(
+        load({
+          ALERT_DURATION_SECONDS: '12',
+          ALERT_TEXT_TEMPLATE: '  {amount} from {name}!  ',
+          ALERT_SOUND: 'cash.mp3',
+          ALERT_IMAGE: 'party.gif',
+        }).alert,
+      ).toEqual({
+        durationMs: 12000,
+        textTemplate: '{amount} from {name}!',
+        assetsDirectory: resolve('custom'),
+        sound: { kind: 'file', fileName: 'cash.mp3' },
+        imageFileName: 'party.gif',
+      });
+    });
+
+    it('resolves files against CUSTOM_ASSETS_DIR', () => {
+      expect(load({ CUSTOM_ASSETS_DIR: '/srv/assets', ALERT_SOUND: 'ding.ogg' }).alert).toMatchObject({
+        assetsDirectory: resolve('/srv/assets'),
+        sound: { kind: 'file', fileName: 'ding.ogg' },
+      });
+    });
+
+    it.each(['none', 'NONE', 'None'])('treats ALERT_SOUND=%s as silent', (value) => {
+      expect(load({ ALERT_SOUND: value }).alert.sound).toEqual({ kind: 'none' });
+    });
+
+    it.each(['1', '61', '2.5', 'eight'])('rejects ALERT_DURATION_SECONDS=%s', (value) => {
+      expect(issuesFor({ ALERT_DURATION_SECONDS: value })[0]).toMatch(/^ALERT_DURATION_SECONDS: /);
+    });
+
+    it('rejects a template over 120 characters', () => {
+      expect(issuesFor({ ALERT_TEXT_TEMPLATE: 'x'.repeat(121) })[0]).toMatch(/^ALERT_TEXT_TEMPLATE: /);
+    });
+
+    it('names a missing file and the folder it looked in', () => {
+      expect(issuesFor({ ALERT_SOUND: 'missing.mp3' })).toEqual([
+        `ALERT_SOUND: no file named "missing.mp3" in ${resolve('custom')}`,
+      ]);
+    });
+
+    it.each(['../secrets.mp3', 'sub/cash.mp3', 'sub\\cash.mp3', '/etc/cash.mp3', '.hidden.mp3', 'C:cash.mp3'])(
+      'refuses %j, which is not a plain file name',
+      (value) => {
+        expect(issuesFor({ ALERT_SOUND: value })[0]).toMatch(/^ALERT_SOUND: must be a plain file name/);
+      },
+    );
+
+    it.each([
+      ['ALERT_SOUND', 'party.gif', /must end in one of .mp3/],
+      ['ALERT_IMAGE', 'cash.mp3', /must end in one of .gif/],
+      ['ALERT_IMAGE', 'page.svg', /must end in one of/],
+    ])('refuses %s=%s with the wrong file type', (variable, value, pattern) => {
+      expect(issuesFor({ [variable]: value })[0]).toMatch(pattern);
+    });
+
+    it('reports problems with both files together', () => {
+      expect(issuesFor({ ALERT_SOUND: 'a.mp3', ALERT_IMAGE: 'b.gif' })).toHaveLength(2);
     });
   });
 });
