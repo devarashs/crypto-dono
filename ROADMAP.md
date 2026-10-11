@@ -95,3 +95,24 @@ Each can be revisited; none is load-bearing enough to block work.
       Verified by following the Quick start on a fresh clone with Docker Compose,
       and by running the CI test job (typecheck, 416 tests) on Linux. The GitHub
       Actions workflow itself has not run yet: the repository is not on GitHub.
+
+## Phase 5 — Retro-futuristic redesign
+
+Agreed 2026-10-11. The look follows the streamer's socials site (purple-black
+surfaces, cyan for anything interactive, magenta glow for atmosphere, Orbitron
+and Share Tech Mono, hard corners, neon grid and scanlines).
+
+- [ ] 12. Every page shares the retro-futuristic design system: donation, thanks
+      and error pages, test-alert page, admin page, and the OBS alert card. Fonts
+      self-hosted; reduced motion honoured; no third-party requests.
+- [ ] 13. Donors pick an amount from preset chips (DONATION_PRESETS) or a Custom
+      chip that reveals an amount field. No JavaScript.
+- [ ] 14. A public leaderboard shows "Top 100 donors" (totals per name,
+      case-insensitive, Anonymous never ranked) and "Recent". Name, amount and
+      date only; paid donations only; banned words masked. Donors opt out with a
+      ticked-by-default checkbox; earlier donations are listed. LEADERBOARD=off
+      disables it.
+      Accepted risk: names are unverified, so two people with one name share a
+      row, and anyone can donate under an existing name.
+- [ ] 15. A small socials strip, configured by SOCIAL_LINKS, with icons copied
+      from simple-icons (CC0). Empty means no strip.
