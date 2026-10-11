@@ -1,11 +1,12 @@
 # Deploying to a small VPS
 
-Tested on AWS Lightsail ($5 plan, Ubuntu 24.04, about 512 MB RAM). Any Ubuntu or
-Debian server with Docker works the same way.
+Written for AWS Lightsail (Ubuntu 24.04, the 1 GB plan); the 512 MB plan also
+works thanks to the swap file. Any Ubuntu or Debian server with Docker works the
+same way.
 
 The result: Caddy on ports 80 and 443 with an automatic HTTPS certificate, the
-app and (optionally) Piper behind it on a private Docker network, a swap file
-so 512 MB is enough, and a nightly database backup.
+app and (optionally) Piper behind it on a private Docker network, a swap file as
+headroom for image builds, and a nightly database backup.
 
 ## 1. Before you start
 
@@ -19,13 +20,19 @@ so 512 MB is enough, and a nightly database backup.
 - **Lightsail snapshots.** Instance → Snapshots → enable automatic snapshots.
   The nightly backup below lives on the same disk; snapshots protect against
   losing the whole instance.
+- **A spending alert.** AWS has no hard spending cap, and traffic beyond the
+  plan's monthly allowance is billed per GB. In the AWS console: Billing and
+  Cost Management → Budgets → Create budget → "Zero spend budget" or a monthly
+  cost budget (e.g. $10), with your email. Promotional credits can hide spend,
+  so prefer a budget on **unblended cost before credits** if the console offers
+  it. Lightsail's own console also shows data transfer used this month.
 
 ## 2. Prepare the server
 
 SSH in (`ssh -i <key.pem> ubuntu@<static-ip>`), then:
 
 ```bash
-# Swap: lets 512 MB survive image builds and Piper speaking.
+# Swap: headroom for image builds and Piper; essential on the 512 MB plan.
 sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
 sudo mkswap /swapfile && sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
