@@ -121,6 +121,25 @@ const environmentSchema = z.object({
     emptyAsUnset,
     z.string().trim().min(1).max(200).default('{name} donated {amount}. {message}'),
   ),
+
+  MESSAGE_MAX_LENGTH: z.preprocess(emptyAsUnset, z.coerce.number().int().min(10).max(500).default(300)),
+  // Comma-separated words or phrases to mask in names and messages.
+  BANNED_WORDS: z.preprocess(
+    emptyAsUnset,
+    z
+      .string()
+      .default('')
+      .transform((list) =>
+        list
+          .split(',')
+          .map((word) => word.trim())
+          .filter((word) => word !== ''),
+      )
+      .refine((words) => words.length <= 1000, 'at most 1000 words'),
+  ),
+  // Amounts in DONATION_CURRENCY, converted with the amount range below.
+  MESSAGE_MIN_AMOUNT: z.preprocess(emptyAsUnset, z.string().default('0')),
+  TTS_MIN_AMOUNT: z.preprocess(emptyAsUnset, z.string().default('0')),
 });
 
 /** Plain file names only: no directories, so a setting can never point outside the folder. */
@@ -173,6 +192,14 @@ export type Config = {
     /** File name in `assetsDirectory`, or `null` for no image. */
     readonly imageFileName: string | null;
   };
+  readonly filters: {
+    readonly messageMaxLength: number;
+    readonly bannedWords: readonly string[];
+    /** Below this, alerts show without the donor's message. */
+    readonly messageMinAmountMinor: number;
+    /** Below this, alerts are not read aloud. */
+    readonly speechMinAmountMinor: number;
+  };
   /** Text-to-speech, or `null` when TTS_URL is not set. */
   readonly tts: {
     /** Piper server origin without a trailing slash. */
@@ -221,6 +248,10 @@ export function loadConfig(
   if (maxAmountMinor === undefined) {
     secondPassIssues.push(`DONATION_MAX_AMOUNT: must be ${amountFormat}`);
   }
+  const messageMinAmountMinor = parseAmountToMinorUnits(variables.MESSAGE_MIN_AMOUNT, fractionDigits);
+  const speechMinAmountMinor = parseAmountToMinorUnits(variables.TTS_MIN_AMOUNT, fractionDigits);
+  if (messageMinAmountMinor === undefined) secondPassIssues.push(`MESSAGE_MIN_AMOUNT: must be ${amountFormat}`);
+  if (speechMinAmountMinor === undefined) secondPassIssues.push(`TTS_MIN_AMOUNT: must be ${amountFormat}`);
   if (minAmountMinor !== undefined && maxAmountMinor !== undefined && maxAmountMinor < minAmountMinor) {
     secondPassIssues.push('DONATION_MAX_AMOUNT: must not be below DONATION_MIN_AMOUNT');
   }
@@ -244,7 +275,13 @@ export function loadConfig(
   }
   if (variables.ALERT_IMAGE !== undefined) checkAsset('ALERT_IMAGE', variables.ALERT_IMAGE, imageExtensions);
 
-  if (secondPassIssues.length > 0 || minAmountMinor === undefined || maxAmountMinor === undefined) {
+  if (
+    secondPassIssues.length > 0 ||
+    minAmountMinor === undefined ||
+    maxAmountMinor === undefined ||
+    messageMinAmountMinor === undefined ||
+    speechMinAmountMinor === undefined
+  ) {
     throw new ConfigError(secondPassIssues);
   }
 
@@ -269,6 +306,12 @@ export function loadConfig(
       assetsDirectory,
       sound,
       imageFileName: variables.ALERT_IMAGE ?? null,
+    },
+    filters: {
+      messageMaxLength: variables.MESSAGE_MAX_LENGTH,
+      bannedWords: variables.BANNED_WORDS,
+      messageMinAmountMinor,
+      speechMinAmountMinor,
     },
     tts: variables.TTS_URL === undefined ? null : { url: variables.TTS_URL, template: variables.TTS_TEMPLATE },
     donation: {
