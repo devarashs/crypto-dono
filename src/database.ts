@@ -7,10 +7,17 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { donorNameKey } from './donations/donor-name-key.ts';
 
 export type Database = DatabaseSync;
 
-type Migration = { readonly version: number; readonly description: string; readonly sql: string };
+type Migration = {
+  readonly version: number;
+  readonly description: string;
+  readonly sql: string;
+  /** Data changes SQL cannot express, run after `sql` in the same transaction. */
+  readonly backfill?: (database: Database) => void;
+};
 
 /**
  * Applied in order, each exactly once. The applied version is tracked in SQLite's
@@ -73,6 +80,28 @@ export const migrations: readonly Migration[] = [
         WHERE alert_triggered_at IS NOT NULL AND alert_shown_at IS NULL;
     `,
   },
+  {
+    version: 4,
+    description: 'Public leaderboard: opt-out flag and grouping key',
+    sql: `
+      -- 1 unless the donor unticked "show me on the public leaderboard".
+      -- Donations from before the leaderboard existed default to listed, as agreed.
+      ALTER TABLE donations ADD COLUMN show_on_leaderboard INTEGER NOT NULL DEFAULT 1
+        CHECK (show_on_leaderboard IN (0, 1));
+      -- Case- and Unicode-insensitive name, filled in by the app (see donor-name-key.ts).
+      ALTER TABLE donations ADD COLUMN donor_name_key TEXT NOT NULL DEFAULT '';
+      CREATE INDEX donations_leaderboard ON donations (donor_name_key)
+        WHERE show_on_leaderboard = 1 AND alert_triggered_at IS NOT NULL;
+    `,
+    backfill: (database) => {
+      const rows = database.prepare('SELECT id, donor_name FROM donations').all() as {
+        id: number;
+        donor_name: string;
+      }[];
+      const update = database.prepare('UPDATE donations SET donor_name_key = ? WHERE id = ?');
+      for (const row of rows) update.run(donorNameKey(row.donor_name), row.id);
+    },
+  },
 ];
 
 /** The schema version a freshly opened database ends up at. */
@@ -105,6 +134,7 @@ export function applyMigrations(database: Database, pending: readonly Migration[
     if (migration.version <= currentVersion) continue;
     runInTransaction(database, () => {
       database.exec(migration.sql);
+      migration.backfill?.(database);
       // PRAGMA cannot take a bound parameter; the version is an integer literal
       // from the list above, never input.
       database.exec(`PRAGMA user_version = ${Math.trunc(migration.version)}`);

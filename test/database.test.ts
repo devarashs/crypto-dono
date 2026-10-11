@@ -92,6 +92,47 @@ describe('upgrading an existing database', () => {
   });
 });
 
+describe('upgrading to the leaderboard schema', () => {
+  it('lists earlier donations and backfills a case-insensitive name key', () => {
+    const database = new DatabaseSync(':memory:');
+    applyMigrations(database, migrations.filter((migration) => migration.version <= 3));
+    const insert = database.prepare(
+      `INSERT INTO donations (public_id, donor_name, amount_minor, currency, created_at, updated_at)
+       VALUES (?, ?, 500, 'usd', 't', 't')`,
+    );
+    insert.run('p1', 'Ann');
+    insert.run('p2', 'ＡＮＮ');
+    insert.run('p3', 'Émile');
+
+    applyMigrations(database, migrations);
+
+    expect(
+      database.prepare('SELECT donor_name_key, show_on_leaderboard FROM donations ORDER BY id').all(),
+    ).toEqual([
+      { donor_name_key: 'ann', show_on_leaderboard: 1 },
+      { donor_name_key: 'ann', show_on_leaderboard: 1 },
+      { donor_name_key: 'émile', show_on_leaderboard: 1 },
+    ]);
+  });
+
+  it('rolls back the schema change if the backfill fails', () => {
+    const database = openDatabase(':memory:');
+    expect(() =>
+      applyMigrations(database, [
+        {
+          version: latestSchemaVersion + 1,
+          description: 'failing backfill',
+          sql: 'CREATE TABLE t (x)',
+          backfill: () => {
+            throw new Error('backfill broke');
+          },
+        },
+      ]),
+    ).toThrow('backfill broke');
+    expect(database.prepare("SELECT name FROM sqlite_master WHERE name = 't'").get()).toBeUndefined();
+  });
+});
+
 describe('runInTransaction', () => {
   it('commits when the work returns', () => {
     const database = openDatabase(':memory:');
