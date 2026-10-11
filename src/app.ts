@@ -9,13 +9,14 @@ import formBody from '@fastify/formbody';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { toOverlayAlert, type AlertHub } from './alerts/alert-hub.ts';
+import { toOverlayAlert, type AlertHub, type OverlayAlert } from './alerts/alert-hub.ts';
 import type { Config } from './config.ts';
 import type { DonationRepository } from './donations/donation-repository.ts';
 import type { NowPaymentsClient } from './nowpayments/nowpayments-client.ts';
 import { registerDonationRoutes, sendHtml } from './routes/donation-routes.ts';
 import { registerOverlayRoutes } from './routes/overlay-routes.ts';
 import { registerWebhookRoutes } from './routes/webhook-routes.ts';
+import { buildSpeechText, type AlertSpeech } from './tts/alert-speech.ts';
 import { renderErrorPage } from './web/pages.ts';
 
 /** Collaborators the routes need, injected so tests can supply their own. */
@@ -24,6 +25,8 @@ export type AppDependencies = {
   readonly nowPayments: NowPaymentsClient;
   /** Receives each donation's alert once, and fans it out to connected overlays. */
   readonly alertHub: AlertHub;
+  /** Speech for alerts; omitted when text-to-speech is not configured. */
+  readonly alertSpeech?: AlertSpeech;
 };
 
 const publicDirectory = fileURLToPath(new URL('../public/', import.meta.url));
@@ -78,6 +81,18 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
     reply.headers(otherHeaders);
   });
 
+  /** Starts synthesising an alert's speech, if text-to-speech is on. */
+  function prepareSpeech(alert: OverlayAlert): void {
+    if (config.tts === null || dependencies.alertSpeech === undefined) return;
+    dependencies.alertSpeech.prepare(alert.id, buildSpeechText(config.tts.template, alert));
+  }
+
+  /** The one way alerts reach overlays, so every alert gets its speech prepared first. */
+  function publishAlert(alert: OverlayAlert): void {
+    prepareSpeech(alert);
+    dependencies.alertHub.publish(alert);
+  }
+
   app.register(formBody);
   app.register(rateLimit, {
     // Opt-in per route via `config.rateLimit`.
@@ -100,11 +115,18 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
     registerWebhookRoutes(scope, {
       config,
       donations: dependencies.donations,
-      onDonationAlert: (donation) => dependencies.alertHub.publish(toOverlayAlert(donation)),
+      onDonationAlert: (donation) => publishAlert(toOverlayAlert(donation)),
     });
   });
   app.register(async (scope) => {
-    registerOverlayRoutes(scope, { config, donations: dependencies.donations, alertHub: dependencies.alertHub });
+    registerOverlayRoutes(scope, {
+      config,
+      donations: dependencies.donations,
+      alertHub: dependencies.alertHub,
+      publishAlert,
+      prepareSpeech,
+      ...(dependencies.alertSpeech !== undefined && { alertSpeech: dependencies.alertSpeech }),
+    });
   });
 
   app.setNotFoundHandler((_request, reply) =>

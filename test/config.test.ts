@@ -43,6 +43,7 @@ describe('loadConfig', () => {
         sound: { kind: 'chime' },
         imageFileName: null,
       },
+      tts: null,
       donation: { currency: 'usd', fractionDigits: 2, minAmountMinor: 100, maxAmountMinor: 100000 },
     });
   });
@@ -242,6 +243,30 @@ describe('loadConfig', () => {
       expect(
         configErrorFor({ ...minimalEnvironment, DONATION_MIN_AMOUNT: 'x', DONATION_MAX_AMOUNT: 'y' }).issues,
       ).toHaveLength(2);
+    });
+  });
+
+  describe('text-to-speech', () => {
+    it('is off without TTS_URL, even with a template', () => {
+      expect(loadConfig({ ...minimalEnvironment, TTS_TEMPLATE: '{message}' }).tts).toBeNull();
+    });
+
+    it('reads the URL without a trailing slash and the default template', () => {
+      expect(loadConfig({ ...minimalEnvironment, TTS_URL: 'http://piper:5000/' }).tts).toEqual({
+        url: 'http://piper:5000',
+        template: '{name} donated {amount}. {message}',
+      });
+    });
+
+    it('reads a custom template', () => {
+      expect(
+        loadConfig({ ...minimalEnvironment, TTS_URL: 'http://piper:5000', TTS_TEMPLATE: ' {name} says {message} ' }).tts
+          ?.template,
+      ).toBe('{name} says {message}');
+    });
+
+    it.each(['piper:5000', 'ftp://piper', 'not a url'])('rejects TTS_URL=%s', (url) => {
+      expect(configErrorFor({ ...minimalEnvironment, TTS_URL: url }).issues[0]).toMatch(/^TTS_URL: /);
     });
   });
 

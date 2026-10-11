@@ -108,6 +108,19 @@ const environmentSchema = z.object({
   ALERT_SOUND: z.preprocess(emptyAsUnset, z.string().trim().optional()),
   // Empty: no image. Otherwise a file name in CUSTOM_ASSETS_DIR.
   ALERT_IMAGE: z.preprocess(emptyAsUnset, z.string().trim().optional()),
+
+  // Address of a Piper text-to-speech server. Unset means alerts are not spoken.
+  TTS_URL: z.preprocess(
+    emptyAsUnset,
+    z
+      .url({ protocol: /^https?$/ })
+      .transform((url) => url.replace(/\/+$/, ''))
+      .optional(),
+  ),
+  TTS_TEMPLATE: z.preprocess(
+    emptyAsUnset,
+    z.string().trim().min(1).max(200).default('{name} donated {amount}. {message}'),
+  ),
 });
 
 /** Plain file names only: no directories, so a setting can never point outside the folder. */
@@ -160,6 +173,13 @@ export type Config = {
     /** File name in `assetsDirectory`, or `null` for no image. */
     readonly imageFileName: string | null;
   };
+  /** Text-to-speech, or `null` when TTS_URL is not set. */
+  readonly tts: {
+    /** Piper server origin without a trailing slash. */
+    readonly url: string;
+    /** What is spoken; `{name}`, `{amount}` and `{message}` are replaced. */
+    readonly template: string;
+  } | null;
   readonly donation: {
     /** Lower-case ISO 4217 code. */
     readonly currency: string;
@@ -250,6 +270,7 @@ export function loadConfig(
       sound,
       imageFileName: variables.ALERT_IMAGE ?? null,
     },
+    tts: variables.TTS_URL === undefined ? null : { url: variables.TTS_URL, template: variables.TTS_TEMPLATE },
     donation: {
       currency: variables.DONATION_CURRENCY,
       fractionDigits,

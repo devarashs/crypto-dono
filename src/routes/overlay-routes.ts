@@ -6,6 +6,7 @@
  *   POST /overlay/:token/alerts/:id/shown     the overlay finished showing an alert
  *   GET  /overlay/:token/assets/sound         the streamer's custom alert sound, if set
  *   GET  /overlay/:token/assets/image         the streamer's custom alert image, if set
+ *   GET  /overlay/:token/alerts/:id/speech    the alert read aloud, as WAV, if TTS is on
  *   GET  /overlay/:token/test                 form for sending a test alert
  *   POST /overlay/:token/test                 send a test alert to connected overlays
  *
@@ -20,6 +21,7 @@ import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { toOverlayAlert, type AlertHub, type OverlayAlert } from '../alerts/alert-hub.ts';
 import type { Config } from '../config.ts';
+import type { AlertSpeech } from '../tts/alert-speech.ts';
 import { validateDonationForm, type DonationFormValues } from '../donations/donation-form.ts';
 import type { DonationRepository } from '../donations/donation-repository.ts';
 import { formatMoneyForDisplay } from '../money.ts';
@@ -40,6 +42,12 @@ export type OverlayRouteDependencies = {
   readonly config: Config;
   readonly donations: DonationRepository;
   readonly alertHub: AlertHub;
+  /** Prepares speech and fans the alert out; used for test alerts. */
+  readonly publishAlert: (alert: OverlayAlert) => void;
+  /** Starts speech for an alert published before this process started (a replay). */
+  readonly prepareSpeech: (alert: OverlayAlert) => void;
+  /** Present only when text-to-speech is configured. */
+  readonly alertSpeech?: AlertSpeech;
   /** Injected for tests. */
   readonly now?: () => Date;
 };
@@ -52,7 +60,7 @@ const overlayContentSecurityPolicy =
 type TokenParams = { token: string };
 
 export function registerOverlayRoutes(app: FastifyInstance, dependencies: OverlayRouteDependencies): void {
-  const { config, donations, alertHub } = dependencies;
+  const { config, donations, alertHub, publishAlert, prepareSpeech, alertSpeech } = dependencies;
   const now = dependencies.now ?? (() => new Date());
   const expectedToken = Buffer.from(config.overlayToken);
 
@@ -84,7 +92,8 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
     data-alert-duration-ms="${config.alert.durationMs}"
     data-text-template="${config.alert.textTemplate}"
     data-sound="${config.alert.sound.kind === 'file' ? `${request.params.token}/assets/sound` : config.alert.sound.kind}"
-    data-image-url="${config.alert.imageFileName === null ? '' : `${request.params.token}/assets/image`}">
+    data-image-url="${config.alert.imageFileName === null ? '' : `${request.params.token}/assets/image`}"
+    data-speech="${alertSpeech === undefined || config.tts === null ? 'off' : 'on'}">
     <div id="alert-stage" aria-live="polite"></div>
   </body>
 </html>`;
@@ -100,6 +109,28 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
     // program in OBS) can show the same alert and each acknowledges it.
     donations.markAlertShown(request.params.id);
     return reply.code(204).send();
+  });
+
+  app.get<{ Params: TokenParams & { id: string } }>('/overlay/:token/alerts/:id/speech', async (request, reply) => {
+    if (alertSpeech === undefined || config.tts === null) return reply.callNotFound();
+    const { id } = request.params;
+    let audio = alertSpeech.getAudio(id);
+    if (audio === undefined) {
+      // Not prepared in this process: a replayed alert from before a restart, or
+      // one that expired from the cache. Rebuilt from the stored donation.
+      const donation = donations.findByPublicId(id);
+      if (donation === undefined || donation.alertTriggeredAt === null) return reply.callNotFound();
+      prepareSpeech(toOverlayAlert(donation));
+      audio = alertSpeech.getAudio(id);
+      if (audio === undefined) return reply.callNotFound();
+    }
+    try {
+      const wav = await audio;
+      return reply.type('audio/wav').header('cache-control', 'no-store').send(wav);
+    } catch {
+      // Already logged where synthesis failed. The overlay shows the alert silently.
+      return reply.code(503).send();
+    }
   });
 
   // Fixed routes rather than serving the folder, so only the two configured files
@@ -153,7 +184,7 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
       );
     }
     // Never stored, so the "test-" id makes the overlay's acknowledgement a no-op.
-    alertHub.publish({
+    publishAlert({
       id: `test-${randomUUID()}`,
       donorName: result.donation.donorName,
       message: result.donation.message,
