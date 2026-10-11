@@ -109,12 +109,14 @@ and Share Tech Mono, hard corners, neon grid and scanlines).
       loaded, no CSP errors) and on the overlay with a test alert.
 - [x] 13. Donors pick an amount from preset chips (DONATION_PRESETS) or a Custom
       chip that reveals an amount field. No JavaScript. Verified in Chromium.
-- [ ] 14. A public leaderboard shows "Top 100 donors" (totals per name,
+- [x] 14. A public leaderboard shows "Top 100 donors" (totals per name,
       case-insensitive, Anonymous never ranked) and "Recent". Name, amount and
       date only; paid donations only; banned words masked. Donors opt out with a
       ticked-by-default checkbox; earlier donations are listed. LEADERBOARD=off
       disables it.
       Accepted risk: names are unverified, so two people with one name share a
       row, and anyone can donate under an existing name.
+      Verified in Chromium at desktop and 375px, including the migration 4 backfill
+      on existing data, name merging, opt-out, masking and the CSS tab switch.
 - [ ] 15. A small socials strip, configured by SOCIAL_LINKS, with icons copied
       from simple-icons (CC0). Empty means no strip.
