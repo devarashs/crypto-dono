@@ -43,6 +43,7 @@ describe('loadConfig', () => {
         sound: { kind: 'chime' },
         imageFileName: null,
       },
+      leaderboardEnabled: true,
       adminPassword: null,
       filters: { messageMaxLength: 300, bannedWords: [], messageMinAmountMinor: 0, speechMinAmountMinor: 0 },
       tts: null,
@@ -303,6 +304,14 @@ describe('loadConfig', () => {
         configErrorFor({ ...minimalEnvironment, DONATION_MIN_AMOUNT: 'x', DONATION_MAX_AMOUNT: 'y' }).issues,
       ).toHaveLength(2);
     });
+  });
+
+  it.each([
+    ['off', false],
+    ['false', false],
+    ['on', true],
+  ])('reads LEADERBOARD=%s', (value, enabled) => {
+    expect(loadConfig({ ...minimalEnvironment, LEADERBOARD: value }).leaderboardEnabled).toBe(enabled);
   });
 
   describe('ADMIN_PASSWORD', () => {
