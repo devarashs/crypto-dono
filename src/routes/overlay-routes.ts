@@ -7,6 +7,8 @@
  *   GET  /overlay/:token/assets/sound         the streamer's custom alert sound, if set
  *   GET  /overlay/:token/assets/image         the streamer's custom alert image, if set
  *   GET  /overlay/:token/alerts/:id/speech    the alert read aloud, as WAV, if TTS is on
+ *   GET  /overlay/:token/board                on-stream table of the biggest donations
+ *   GET  /overlay/:token/board.json           its data, polled by the table
  *   GET  /overlay/:token/test                 form for sending a test alert
  *   POST /overlay/:token/test                 send a test alert to connected overlays
  *
@@ -20,14 +22,23 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AlertHub, OverlayAlert } from '../alerts/alert-hub.ts';
+import { createBannedWordFilter } from '../alerts/banned-words.ts';
 import { donationToAlertSource, type AlertPresenter, type PresentedAlert } from '../alerts/alert-presenter.ts';
 import type { Config } from '../config.ts';
 import type { AlertSpeech } from '../tts/alert-speech.ts';
 import { validateDonationForm, type DonationFormValues } from '../donations/donation-form.ts';
 import type { DonationRepository } from '../donations/donation-repository.ts';
+import type { LeaderboardQueries } from '../donations/leaderboard.ts';
+import { formatMoneyForDisplay } from '../money.ts';
 import { html } from '../web/html.ts';
 import { renderTestAlertPage } from '../web/pages.ts';
 import { sendHtml } from './donation-routes.ts';
+
+/** Rows in the on-stream table of biggest donations. */
+const boardSize = 10;
+
+/** How often the on-stream table re-reads its data. New donations are rare; this is plenty. */
+const boardRefreshMs = 15_000;
 
 /** Pending alerts older than this are not replayed, so a long-closed OBS does not flood the stream. */
 export const alertReplayWindowMs = 24 * 60 * 60 * 1000;
@@ -50,6 +61,8 @@ export type OverlayRouteDependencies = {
   readonly prepareSpeech: (presented: PresentedAlert) => void;
   /** Present only when text-to-speech is configured. */
   readonly alertSpeech?: AlertSpeech;
+  /** Read-only queries behind the on-stream table of biggest donations. */
+  readonly leaderboard: LeaderboardQueries;
   /** Injected for tests. */
   readonly now?: () => Date;
 };
@@ -62,7 +75,9 @@ const overlayContentSecurityPolicy =
 type TokenParams = { token: string };
 
 export function registerOverlayRoutes(app: FastifyInstance, dependencies: OverlayRouteDependencies): void {
-  const { config, donations, alertHub, presentAlert, publishAlert, prepareSpeech, alertSpeech } = dependencies;
+  const { config, donations, alertHub, presentAlert, publishAlert, prepareSpeech, alertSpeech, leaderboard } =
+    dependencies;
+  const bannedWords = createBannedWordFilter(config.filters.bannedWords);
   const now = dependencies.now ?? (() => new Date());
   const expectedToken = Buffer.from(config.overlayToken);
 
@@ -76,6 +91,37 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
     if (typeof request.params.token !== 'string' || !hasValidToken(request.params.token)) {
       return reply.callNotFound();
     }
+  });
+
+  app.get<{ Params: TokenParams }>('/overlay/:token/board', async (request, reply) => {
+    reply.header('content-security-policy', overlayContentSecurityPolicy);
+    const page = html`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Biggest donations</title>
+    <link rel="stylesheet" href="/static/board.css">
+    <script src="/static/board.js" type="module"></script>
+  </head>
+  <!-- Relative to /overlay/<token>/board, so the token is never written into the page. -->
+  <body data-data-url="board.json" data-refresh-ms="${boardRefreshMs}">
+    <section class="board-panel" aria-label="Biggest donations">
+      <h1 class="board-panel__title">Top donations</h1>
+      <ol class="board-list" id="board-list"></ol>
+      <p class="board-panel__empty" id="board-empty" hidden>No donations yet</p>
+    </section>
+  </body>
+</html>`;
+    return sendHtml(reply, 200, page);
+  });
+
+  app.get<{ Params: TokenParams }>('/overlay/:token/board.json', async (_request, reply) => {
+    const currency = config.donation.currency;
+    const rows = leaderboard.biggest(currency, boardSize).map((row) => ({
+      donorName: bannedWords.mask(row.donorName),
+      amount: formatMoneyForDisplay(row.amountMinor, currency),
+    }));
+    return reply.header('cache-control', 'no-store').send({ donations: rows });
   });
 
   app.get<{ Params: TokenParams }>('/overlay/:token', async (request, reply) => {

@@ -123,7 +123,8 @@ describe('admin routes', () => {
     expect(dashboard.statusCode).toBe(200);
     // The admin sees what the donor actually wrote, unfiltered.
     expect(dashboard.body).toContain('darn good stream');
-    expect(dashboard.body).toContain(`http://localhost:3000/overlay/${token}`);
+    expect(dashboard.body).toContain(`https://dono.example.com/overlay/${token}`);
+    expect(dashboard.body).toContain(`https://dono.example.com/overlay/${token}/board`);
     expect(dashboard.body).toContain(`/overlay/${token}/test`);
   });
 
