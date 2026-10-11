@@ -73,7 +73,12 @@ describe('app', () => {
     context = buildTestApp();
     const response = await context.app.inject({ method: 'GET', url: '/' });
     expect(response.headers['content-security-policy']).toContain("script-src 'none'");
-    expect(response.headers['content-security-policy']).toContain('form-action');
+    // Regression: NOWPayments' checkout URL 301s through plain http before
+    // returning to https; without this source the browser blocks the redirect
+    // and the donor stays on the form.
+    expect(response.headers['content-security-policy']).toMatch(
+      /form-action 'self' [^;]*https:\/\/nowpayments\.io[^;]*http:\/\/nowpayments\.io/,
+    );
     expect(response.headers['x-content-type-options']).toBe('nosniff');
     expect(response.headers['referrer-policy']).toBe('no-referrer');
   });

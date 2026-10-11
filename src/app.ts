@@ -27,13 +27,18 @@ const publicDirectory = fileURLToPath(new URL('../public/', import.meta.url));
  * Applied to every response. The pages load nothing from other origins and use no
  * inline script or style, so the policy can be strict.
  *
- * form-action must include NOWPayments: browsers apply it to the redirect that
- * follows a form submission, and POST /donate redirects to their checkout.
+ * form-action must include NOWPayments: browsers apply it to every hop of the
+ * redirect chain that follows a form submission, and POST /donate redirects to
+ * their checkout. That includes plain http://nowpayments.io, because their
+ * invoice URL (https://nowpayments.io/payment/?iid=…) answers with a 301 to
+ * http://nowpayments.io/payment?iid=… before upgrading back to https (observed
+ * 2026-10-11). Without it the browser silently stays on the donation form.
  */
 const securityHeaders = {
   'content-security-policy':
     "default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self' data:; " +
-    "form-action 'self' https://nowpayments.io https://*.nowpayments.io; frame-ancestors 'none'; base-uri 'none'",
+    "form-action 'self' https://nowpayments.io https://*.nowpayments.io http://nowpayments.io; " +
+    "frame-ancestors 'none'; base-uri 'none'",
   'x-content-type-options': 'nosniff',
   // The thanks URL carries the donation id; never leak it to another site.
   'referrer-policy': 'no-referrer',
