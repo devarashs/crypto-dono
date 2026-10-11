@@ -102,9 +102,11 @@ Agreed 2026-10-11. The look follows the streamer's socials site (purple-black
 surfaces, cyan for anything interactive, magenta glow for atmosphere, Orbitron
 and Share Tech Mono, hard corners, neon grid and scanlines).
 
-- [ ] 12. Every page shares the retro-futuristic design system: donation, thanks
+- [x] 12. Every page shares the retro-futuristic design system: donation, thanks
       and error pages, test-alert page, admin page, and the OBS alert card. Fonts
       self-hosted; reduced motion honoured; no third-party requests.
+      Verified in Chromium at desktop and 375px (no horizontal scroll, both fonts
+      loaded, no CSP errors) and on the overlay with a test alert.
 - [ ] 13. Donors pick an amount from preset chips (DONATION_PRESETS) or a Custom
       chip that reveals an amount field. No JavaScript.
 - [ ] 14. A public leaderboard shows "Top 100 donors" (totals per name,
