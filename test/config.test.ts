@@ -44,6 +44,7 @@ describe('loadConfig', () => {
         imageFileName: null,
       },
       socialLinks: [],
+      twitch: null,
       leaderboardEnabled: true,
       adminPassword: null,
       filters: { messageMaxLength: 300, bannedWords: [], messageMinAmountMinor: 0, speechMinAmountMinor: 0 },
@@ -368,6 +369,29 @@ describe('loadConfig', () => {
       expect(configErrorFor({ ...minimalEnvironment, EVENT_SOUND_SUB: 'missing.mp3' }).issues[0]).toMatch(
         /^EVENT_SOUND_SUB: no file named "missing.mp3"/,
       );
+    });
+  });
+
+  describe('Twitch credentials', () => {
+    it('reads both together', () => {
+      expect(
+        loadConfig({ ...minimalEnvironment, TWITCH_CLIENT_ID: 'abc123xyz', TWITCH_CLIENT_SECRET: 'secret456' }).twitch,
+      ).toEqual({ clientId: 'abc123xyz', clientSecret: 'secret456' });
+    });
+
+    it.each([
+      ['only the id', { TWITCH_CLIENT_ID: 'abc123xyz' }],
+      ['only the secret', { TWITCH_CLIENT_SECRET: 'secret456' }],
+    ])('rejects %s', (_label, overrides) => {
+      expect(configErrorFor({ ...minimalEnvironment, ...overrides }).issues).toEqual([
+        'TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET: set both, or neither',
+      ]);
+    });
+
+    it('rejects a client id that is not Twitch-shaped, such as a leftover placeholder', () => {
+      expect(
+        configErrorFor({ ...minimalEnvironment, TWITCH_CLIENT_ID: '...', TWITCH_CLIENT_SECRET: 'x' }).issues[0],
+      ).toMatch(/^TWITCH_CLIENT_ID: should be the Client ID/);
     });
   });
 
