@@ -58,7 +58,7 @@ Each can be revisited; none is load-bearing enough to block work.
       Status: built and demonstrated in Chromium and Docker (live alert from a signed
       IPN, unicode, HTML shown as text, ack after display, two missed alerts replayed
       in order, clean console). Not yet confirmed inside OBS itself.
-- [ ] 6a. The streamer can send a test alert to OBS without a payment. Pulled
+- [x] 6a. The streamer can send a test alert to OBS without a payment. Pulled
       forward from item 10 at the streamer's request (2026-10-11), to set up the
       overlay in OBS before the admin page exists. Protected by the overlay token.
 - [ ] 7. The streamer can restyle alerts (sound, image, duration, template) without
