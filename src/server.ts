@@ -6,6 +6,8 @@ import { buildApp } from './app.ts';
 import { ConfigError, loadConfig } from './config.ts';
 import { openDatabase } from './database.ts';
 import { createAlertHub } from './alerts/alert-hub.ts';
+import { createAlertSpeech } from './tts/alert-speech.ts';
+import { createPiperClient } from './tts/piper-client.ts';
 import { createDonationRepository } from './donations/donation-repository.ts';
 import { createNowPaymentsClient } from './nowpayments/nowpayments-client.ts';
 
@@ -49,6 +51,12 @@ const app = buildApp(config, {
     baseUrl: config.nowPayments.baseUrl,
   }),
   alertHub: createAlertHub((error) => app.log.error({ err: error }, 'An overlay listener failed')),
+  ...(config.tts !== null && {
+    alertSpeech: createAlertSpeech({
+      synthesize: createPiperClient({ baseUrl: config.tts.url }).synthesize,
+      onError: (error, alertId) => app.log.warn({ err: error, alertId }, 'Text-to-speech failed; alert shown without speech'),
+    }),
+  }),
 });
 app.addHook('onClose', async () => {
   database.close();
@@ -71,3 +79,4 @@ await app.listen({ host: config.host, port: config.port });
 app.log.info(`Public address: ${config.publicBaseUrl}`);
 app.log.info(`Database: ${config.databasePath}`);
 app.log.info(`NOWPayments: ${config.nowPayments.sandbox ? 'sandbox' : 'production'}`);
+app.log.info(`Text-to-speech: ${config.tts === null ? 'off' : config.tts.url}`);

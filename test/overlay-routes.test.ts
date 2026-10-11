@@ -10,6 +10,7 @@ import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
 import { openDatabase } from '../src/database.ts';
 import { createDonationRepository, type DonationRepository } from '../src/donations/donation-repository.ts';
+import { createAlertSpeech } from '../src/tts/alert-speech.ts';
 
 const token = 'overlay-token-for-tests-0123456789';
 
@@ -281,6 +282,111 @@ describe('overlay routes', () => {
         expect(response.statusCode, url).toBe(404);
         expect(response.body).not.toContain('not configured');
       }
+    });
+  });
+
+  describe('alert speech', () => {
+    let speechApp: FastifyInstance;
+    let synthesize: ReturnType<typeof vi.fn<(text: string) => Promise<Buffer>>>;
+    let speechDonations: DonationRepository;
+
+    function wav(label: string): Buffer {
+      const bytes = Buffer.alloc(44 + label.length);
+      bytes.write('RIFF', 0, 'ascii');
+      bytes.write('WAVE', 8, 'ascii');
+      bytes.write(label, 44, 'utf8');
+      return bytes;
+    }
+
+    function buildSpeechApp(ttsUrl: string | undefined) {
+      const config = loadConfig({
+        PUBLIC_BASE_URL: 'https://dono.example.com',
+        NOWPAYMENTS_API_KEY: 'k',
+        NOWPAYMENTS_IPN_SECRET: 's',
+        OVERLAY_TOKEN: token,
+        LOG_LEVEL: 'fatal',
+        TTS_TEMPLATE: '{name} sent {amount}. {message}',
+        ...(ttsUrl !== undefined && { TTS_URL: ttsUrl }),
+      });
+      speechDonations = createDonationRepository(openDatabase(':memory:'));
+      synthesize = vi.fn(async (text: string) => wav(text));
+      speechApp = buildApp(config, {
+        donations: speechDonations,
+        nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
+        alertHub: createAlertHub(),
+        alertSpeech: createAlertSpeech({ synthesize }),
+      });
+      return speechApp;
+    }
+
+    afterEach(async () => {
+      await speechApp?.close();
+    });
+
+    it('turns speech on in the page only when TTS_URL is set', async () => {
+      const off = await buildSpeechApp(undefined).inject({ method: 'GET', url: `/overlay/${token}` });
+      expect(off.body).toContain('data-speech="off"');
+      await speechApp.close();
+      const on = await buildSpeechApp('http://piper:5000').inject({ method: 'GET', url: `/overlay/${token}` });
+      expect(on.body).toContain('data-speech="on"');
+    });
+
+    it('synthesises a test alert as soon as it is sent, and serves it as WAV', async () => {
+      const app = buildSpeechApp('http://piper:5000');
+      await app.inject({
+        method: 'POST',
+        url: `/overlay/${token}/test`,
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        payload: new URLSearchParams({ donorName: 'Ann', amount: '5', message: 'hi there' }).toString(),
+      });
+      expect(synthesize).toHaveBeenCalledWith('Ann sent $5.00. hi there');
+    });
+
+    it('serves speech for a paid donation, rebuilding it after a restart', async () => {
+      const app = buildSpeechApp('http://piper:5000');
+      const { publicId } = speechDonations.create({ donorName: 'Bo', message: '', amountMinor: 250, currency: 'usd' });
+      speechDonations.applyPaymentUpdate(
+        publicId,
+        { status: 'finished', paymentId: 'p', invoiceId: null, payCurrency: 'ltc', actuallyPaid: '1' },
+        'confirmed',
+      );
+
+      const response = await app.inject({ method: 'GET', url: `/overlay/${token}/alerts/${publicId}/speech` });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['content-type']).toBe('audio/wav');
+      expect(response.rawPayload.subarray(44).toString()).toBe('Bo sent $2.50.');
+      await app.inject({ method: 'GET', url: `/overlay/${token}/alerts/${publicId}/speech` });
+      expect(synthesize).toHaveBeenCalledOnce();
+    });
+
+    it('answers 404 for an unknown alert or an unpaid donation', async () => {
+      const app = buildSpeechApp('http://piper:5000');
+      const { publicId } = speechDonations.create({ donorName: 'Unpaid', message: '', amountMinor: 250, currency: 'usd' });
+      for (const id of ['nope', publicId, 'test-gone-after-restart']) {
+        const response = await app.inject({ method: 'GET', url: `/overlay/${token}/alerts/${id}/speech` });
+        expect(response.statusCode, id).toBe(404);
+      }
+      expect(synthesize).not.toHaveBeenCalled();
+    });
+
+    it('answers 503 when Piper fails, so the overlay carries on silently', async () => {
+      const app = buildSpeechApp('http://piper:5000');
+      synthesize.mockRejectedValue(new Error('piper down'));
+      const { publicId } = speechDonations.create({ donorName: 'Cy', message: '', amountMinor: 250, currency: 'usd' });
+      speechDonations.applyPaymentUpdate(
+        publicId,
+        { status: 'finished', paymentId: 'p', invoiceId: null, payCurrency: 'ltc', actuallyPaid: '1' },
+        'confirmed',
+      );
+      const response = await app.inject({ method: 'GET', url: `/overlay/${token}/alerts/${publicId}/speech` });
+      expect(response.statusCode).toBe(503);
+    });
+
+    it('answers 404 when text-to-speech is off', async () => {
+      const app = buildSpeechApp(undefined);
+      const response = await app.inject({ method: 'GET', url: `/overlay/${token}/alerts/anything/speech` });
+      expect(response.statusCode).toBe(404);
     });
   });
 

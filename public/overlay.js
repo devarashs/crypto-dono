@@ -19,6 +19,13 @@ const templateParts = splitAlertTemplate(settings.textTemplate || '{name} donate
 /** "chime", "none", or the URL of the streamer's own sound. */
 const soundSetting = settings.sound || 'chime';
 const imageUrl = settings.imageUrl ? new URL(settings.imageUrl, window.location.href).href : '';
+const speechEnabled = settings.speech === 'on';
+/** Lets the alert sound start before the voice, so the two do not talk over each other. */
+const speechDelayMs = 1200;
+/** The card stays this long after the voice finishes, so the message can be read. */
+const holdAfterSpeechMs = 1000;
+/** A stuck audio element must never freeze the queue. */
+const maximumSpeechMs = 60_000;
 /** Matches --overlay-exit-duration, plus a little slack before the next alert. */
 const exitDurationMs = 200;
 const gapBetweenAlertsMs = 600;
@@ -52,8 +59,16 @@ async function showAlert(alert) {
   // Forces a style flush so the transition runs from the hidden state.
   void card.offsetWidth;
   card.classList.add('is-visible');
+  const shownAt = performance.now();
   playAlertSound();
-  await wait(alertDurationMs);
+  if (speechEnabled) {
+    await wait(speechDelayMs);
+    await speak(alert.id);
+  }
+  // At least the configured duration, longer if the speech ran past it.
+  const elapsedMs = performance.now() - shownAt;
+  const visibleMs = Math.max(alertDurationMs, speechEnabled ? elapsedMs + holdAfterSpeechMs : 0);
+  await wait(visibleMs - elapsedMs);
   card.classList.remove('is-visible');
   await wait(exitDurationMs);
   card.remove();
@@ -143,6 +158,25 @@ function playChime() {
   } catch {
     // No audio is better than no alert.
   }
+}
+
+/**
+ * Plays the alert's speech from the server and resolves when it ends. Also
+ * resolves on any failure (Piper down, unknown alert, blocked autoplay), because
+ * a missing voice must never hold up the alert queue.
+ */
+function speak(alertId) {
+  const audio = new Audio(new URL(`alerts/${encodeURIComponent(alertId)}/speech`, eventsUrl).href);
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(safetyTimer);
+      resolve();
+    };
+    const safetyTimer = setTimeout(finish, maximumSpeechMs);
+    audio.addEventListener('ended', finish, { once: true });
+    audio.addEventListener('error', finish, { once: true });
+    audio.play().catch(finish);
+  });
 }
 
 function wait(milliseconds) {
