@@ -110,6 +110,37 @@ are deleted.
 - **OBS**: Browser Source URL `https://dono.example.com/overlay/<OVERLAY_TOKEN>`.
 - Send a test alert from `https://dono.example.com/overlay/<OVERLAY_TOKEN>/test`.
 
+## Automatic deploys from GitHub (optional)
+
+Every push to `main` that passes CI can deploy itself. The `deploy` job in
+`.github/workflows/ci.yml` SSHes in and runs `deploy/update.sh`, which backs up
+the database, fast-forwards, rebuilds, waits for the health check, and rolls
+back to the previous commit if the new version does not come up. A failed
+deploy or rollback shows as a red run on GitHub.
+
+One-time setup:
+
+1. On your machine, create a key for GitHub to use (no passphrase):
+   `ssh-keygen -t ed25519 -N "" -C crypto-dono-github-deploy -f deploy_key`
+2. On the server, allow that key to run the update script **and nothing else**
+   by adding one line to `~/.ssh/authorized_keys`:
+   ```
+   restrict,command="sh /home/ubuntu/crypto-dono/deploy/update.sh" <contents of deploy_key.pub>
+   ```
+   `restrict` forbids a shell, port forwarding and the rest; whatever command
+   the client asks for, the server runs the update script.
+3. In the GitHub repository, Settings → Secrets and variables → Actions:
+   - secret `DEPLOY_SSH_KEY`: the contents of `deploy_key` (the private half);
+   - variable `DEPLOY_KNOWN_HOSTS`: the output of
+     `ssh-keyscan -t ed25519 <server-ip>`. Compare its fingerprint
+     (`ssh-keygen -lf`) with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`
+     on the server before trusting it;
+   - variable `DEPLOY_HOST`: the server's IP or hostname. Set this last: the job
+     stays off until it exists.
+4. Delete `deploy_key` from your machine.
+
+To deploy by hand instead, or to retry: `sh deploy/update.sh` on the server.
+
 ## Updating
 
 ```bash

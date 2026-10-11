@@ -136,3 +136,5 @@ and Share Tech Mono, hard corners, neon grid and scanlines).
       SSHes in with a deploy key restricted to deploy/update.sh, which backs up,
       fast-forwards, rebuilds, health-checks, and rolls back to the previous
       commit if the new version does not come up healthy.
+      Deploy key verified to refuse a shell, file reads and port forwarding; host
+      key pinned after matching three sources.
