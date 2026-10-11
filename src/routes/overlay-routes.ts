@@ -19,12 +19,12 @@
  */
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { toOverlayAlert, type AlertHub, type OverlayAlert } from '../alerts/alert-hub.ts';
+import type { AlertHub, OverlayAlert } from '../alerts/alert-hub.ts';
+import { donationToAlertSource, type AlertPresenter, type PresentedAlert } from '../alerts/alert-presenter.ts';
 import type { Config } from '../config.ts';
 import type { AlertSpeech } from '../tts/alert-speech.ts';
 import { validateDonationForm, type DonationFormValues } from '../donations/donation-form.ts';
 import type { DonationRepository } from '../donations/donation-repository.ts';
-import { formatMoneyForDisplay } from '../money.ts';
 import { html } from '../web/html.ts';
 import { renderTestAlertPage } from '../web/pages.ts';
 import { sendHtml } from './donation-routes.ts';
@@ -42,10 +42,12 @@ export type OverlayRouteDependencies = {
   readonly config: Config;
   readonly donations: DonationRepository;
   readonly alertHub: AlertHub;
+  /** Applies the streamer's filters; the only way alerts are built. */
+  readonly presentAlert: AlertPresenter;
   /** Prepares speech and fans the alert out; used for test alerts. */
-  readonly publishAlert: (alert: OverlayAlert) => void;
+  readonly publishAlert: (presented: PresentedAlert) => void;
   /** Starts speech for an alert published before this process started (a replay). */
-  readonly prepareSpeech: (alert: OverlayAlert) => void;
+  readonly prepareSpeech: (presented: PresentedAlert) => void;
   /** Present only when text-to-speech is configured. */
   readonly alertSpeech?: AlertSpeech;
   /** Injected for tests. */
@@ -60,7 +62,7 @@ const overlayContentSecurityPolicy =
 type TokenParams = { token: string };
 
 export function registerOverlayRoutes(app: FastifyInstance, dependencies: OverlayRouteDependencies): void {
-  const { config, donations, alertHub, publishAlert, prepareSpeech, alertSpeech } = dependencies;
+  const { config, donations, alertHub, presentAlert, publishAlert, prepareSpeech, alertSpeech } = dependencies;
   const now = dependencies.now ?? (() => new Date());
   const expectedToken = Buffer.from(config.overlayToken);
 
@@ -120,7 +122,8 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
       // one that expired from the cache. Rebuilt from the stored donation.
       const donation = donations.findByPublicId(id);
       if (donation === undefined || donation.alertTriggeredAt === null) return reply.callNotFound();
-      prepareSpeech(toOverlayAlert(donation));
+      // Re-applies today's filters, so a donation now below TTS_MIN_AMOUNT stays silent.
+      prepareSpeech(presentAlert(donationToAlertSource(donation)));
       audio = alertSpeech.getAudio(id);
       if (audio === undefined) return reply.callNotFound();
     }
@@ -175,6 +178,7 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
       fractionDigits: config.donation.fractionDigits,
       minAmountMinor: 1,
       maxAmountMinor: Number.MAX_SAFE_INTEGER,
+      messageMaxLength: config.filters.messageMaxLength,
     });
     if (!result.ok) {
       return sendHtml(
@@ -184,12 +188,16 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
       );
     }
     // Never stored, so the "test-" id makes the overlay's acknowledgement a no-op.
-    publishAlert({
-      id: `test-${randomUUID()}`,
-      donorName: result.donation.donorName,
-      message: result.donation.message,
-      amount: formatMoneyForDisplay(result.donation.amountMinor, config.donation.currency),
-    });
+    // Filtered like a real donation, so a test previews exactly what would show.
+    publishAlert(
+      presentAlert({
+        id: `test-${randomUUID()}`,
+        donorName: result.donation.donorName,
+        message: result.donation.message,
+        amountMinor: result.donation.amountMinor,
+        currency: config.donation.currency,
+      }),
+    );
     request.log.info({ overlays: alertHub.subscriberCount }, 'Test alert sent');
     // Post/redirect/get, so refreshing the result does not send another alert.
     return reply.redirect(`test?sent=${alertHub.subscriberCount}`, 303);
@@ -222,7 +230,9 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
     // missed; `sentIds` stops it being sent twice.
     const unsubscribe = alertHub.subscribe(send);
     const replayCutoff = new Date(now().getTime() - alertReplayWindowMs).toISOString();
-    for (const donation of donations.listPendingAlerts(replayCutoff)) send(toOverlayAlert(donation));
+    for (const donation of donations.listPendingAlerts(replayCutoff)) {
+      send(presentAlert(donationToAlertSource(donation)).alert);
+    }
 
     const heartbeat = setInterval(() => response.write(': heartbeat\n\n'), heartbeatIntervalMs);
     request.log.info({ subscribers: alertHub.subscriberCount }, 'Overlay connected');

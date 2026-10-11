@@ -5,10 +5,10 @@
  * published while no overlay is connected is not lost: the donation row keeps
  * `alert_shown_at` empty and the overlay replays it on its next connection.
  */
-import type { Donation } from '../donations/donation-repository.ts';
-import { formatMoneyForDisplay } from '../money.ts';
-
-/** What an overlay receives. Only display fields; nothing about the payment internals. */
+/**
+ * What an overlay receives, already filtered (see alert-presenter.ts). Only
+ * display fields; nothing about the payment internals.
+ */
 export type OverlayAlert = {
   /** The donation's public id, used to acknowledge the alert once shown. */
   readonly id: string;
@@ -16,16 +16,9 @@ export type OverlayAlert = {
   readonly message: string;
   /** Formatted for display, e.g. "$5.00". */
   readonly amount: string;
+  /** Whether the overlay should fetch and play speech for this alert. */
+  readonly speak: boolean;
 };
-
-export function toOverlayAlert(donation: Donation): OverlayAlert {
-  return {
-    id: donation.publicId,
-    donorName: donation.donorName,
-    message: donation.message,
-    amount: formatMoneyForDisplay(donation.amountMinor, donation.currency),
-  };
-}
 
 export type AlertListener = (alert: OverlayAlert) => void;
 

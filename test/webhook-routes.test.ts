@@ -119,6 +119,7 @@ describe('POST /webhooks/nowpayments', () => {
       donorName: 'Ann',
       message: 'gg',
       amount: '$5.00',
+      speak: false,
     });
     expect(donations.findByPublicId(donation.publicId)).toMatchObject({
       status: 'confirmed',

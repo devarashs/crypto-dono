@@ -154,10 +154,12 @@ describe('overlay routes', () => {
     it('pushes alerts published while connected', async () => {
       const stream = await openEventStream();
       await stream.waitFor('retry:');
-      alertHub.publish({ id: 'live-1', donorName: 'Live', message: 'hi', amount: '$2.00' });
+      alertHub.publish({ id: 'live-1', donorName: 'Live', message: 'hi', amount: '$2.00', speak: false });
       await stream.waitFor('Live');
       expect(stream.text()).toContain('id: live-1\nevent: alert\n');
-      expect(parseAlerts(stream.text())).toEqual([{ id: 'live-1', donorName: 'Live', message: 'hi', amount: '$2.00' }]);
+      expect(parseAlerts(stream.text())).toEqual([
+        { id: 'live-1', donorName: 'Live', message: 'hi', amount: '$2.00', speak: false },
+      ]);
     });
 
     it('does not replay alerts already shown', async () => {
@@ -173,8 +175,8 @@ describe('overlay routes', () => {
       const id = paidDonation('Once');
       const stream = await openEventStream();
       await stream.waitFor('Once');
-      alertHub.publish({ id, donorName: 'Once', message: '', amount: '$5.00' });
-      alertHub.publish({ id: 'next', donorName: 'Next', message: '', amount: '$1.00' });
+      alertHub.publish({ id, donorName: 'Once', message: '', amount: '$5.00', speak: false });
+      alertHub.publish({ id: 'next', donorName: 'Next', message: '', amount: '$1.00', speak: false });
       await stream.waitFor('Next');
       expect(parseAlerts(stream.text()).map((alert) => alert.donorName)).toEqual(['Once', 'Next']);
     });
@@ -418,7 +420,13 @@ describe('overlay routes', () => {
       expect(response.statusCode).toBe(303);
       expect(response.headers.location).toBe('test?sent=2');
       expect(received).toEqual([
-        { id: expect.stringMatching(/^test-[0-9a-f-]{36}$/), donorName: 'Tester', message: 'line break', amount: '$12.50' },
+        {
+          id: expect.stringMatching(/^test-[0-9a-f-]{36}$/),
+          donorName: 'Tester',
+          message: 'line break',
+          amount: '$12.50',
+          speak: false,
+        },
       ]);
       expect(donations.listPendingAlerts('1970-01-01T00:00:00.000Z')).toEqual([]);
     });

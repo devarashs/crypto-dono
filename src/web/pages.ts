@@ -27,6 +27,9 @@ export type DonationPageModel = {
   readonly fractionDigits: number;
   readonly minAmountMinor: number;
   readonly maxAmountMinor: number;
+  readonly messageMaxLength: number;
+  /** Messages are only shown on stream for donations of at least this much. */
+  readonly messageMinAmountMinor: number;
   readonly values?: DonationFormValues;
   readonly errors?: DonationFormErrors;
   /** A one-line message above the form, e.g. after a cancelled payment. */
@@ -70,6 +73,7 @@ export function renderDonationPage(model: DonationPageModel): SafeHtml {
           label: 'Message',
           optional: true,
           error: errors.message,
+          hint: errors.message === undefined ? messageHint(model) : undefined,
           control: html`<textarea id="message" name="message"${errorAttributes('message', errors.message)}>${values.message}</textarea>`,
         })}
         <button type="submit">Continue to payment</button>
@@ -77,6 +81,13 @@ export function renderDonationPage(model: DonationPageModel): SafeHtml {
       <p class="muted footnote">You will choose a coin and pay on NOWPayments' checkout.</p>
     `,
   );
+}
+
+/** Tells donors the limits before they type, not after they pay. */
+function messageHint(model: DonationPageModel): string {
+  const length = `Up to ${model.messageMaxLength} characters.`;
+  if (model.messageMinAmountMinor <= model.minAmountMinor) return length;
+  return `${length} Shown on stream for donations of ${formatMoneyForDisplay(model.messageMinAmountMinor, model.currency)} or more.`;
 }
 
 type FieldModel = {

@@ -25,8 +25,11 @@ export type DonationRouteDependencies = {
 
 export function registerDonationRoutes(app: FastifyInstance, dependencies: DonationRouteDependencies): void {
   const { config, donations, nowPayments } = dependencies;
+  const formRules = { ...config.donation, messageMaxLength: config.filters.messageMaxLength };
   const pageModel = {
     streamerName: config.streamerName,
+    messageMaxLength: config.filters.messageMaxLength,
+    messageMinAmountMinor: config.filters.messageMinAmountMinor,
     currency: config.donation.currency,
     fractionDigits: config.donation.fractionDigits,
     minAmountMinor: config.donation.minAmountMinor,
@@ -47,7 +50,7 @@ export function registerDonationRoutes(app: FastifyInstance, dependencies: Donat
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
     },
     async (request, reply) => {
-      const result = validateDonationForm(request.body, config.donation);
+      const result = validateDonationForm(request.body, formRules);
       if (!result.ok) {
         return sendHtml(reply, 400, renderDonationPage({ ...pageModel, values: result.values, errors: result.errors }));
       }

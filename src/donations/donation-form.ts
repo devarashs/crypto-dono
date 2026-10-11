@@ -9,11 +9,12 @@
 import { formatMinorUnits, formatMoneyForDisplay, parseAmountToMinorUnits } from '../money.ts';
 
 export const donorNameMaxLength = 32;
-export const messageMaxLength = 300;
 export const anonymousDonorName = 'Anonymous';
 
 export type DonationFormRules = {
   readonly currency: string;
+  /** From MESSAGE_MAX_LENGTH; counted in characters (code points). */
+  readonly messageMaxLength: number;
   readonly fractionDigits: number;
   readonly minAmountMinor: number;
   readonly maxAmountMinor: number;
@@ -52,8 +53,8 @@ export function validateDonationForm(body: unknown, rules: DonationFormRules): D
   }
 
   const message = normaliseText(values.message);
-  if (codePointLength(message) > messageMaxLength) {
-    errors.message = `Keep your message to ${messageMaxLength} characters or fewer.`;
+  if (codePointLength(message) > rules.messageMaxLength) {
+    errors.message = `Keep your message to ${rules.messageMaxLength} characters or fewer.`;
   }
 
   const amountMinor = parseAmountToMinorUnits(values.amount, rules.fractionDigits);
