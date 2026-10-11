@@ -205,6 +205,26 @@ describe('app', () => {
     });
   });
 
+  describe('socials strip', () => {
+    it("renders labelled icon links in order, marked as the streamer's own", async () => {
+      context = buildTestApp({
+        SOCIAL_LINKS: 'twitch=https://www.twitch.tv/machinearash,link=https://devarash.example/blog',
+      });
+      const body = (await context.app.inject({ method: 'GET', url: '/' })).body;
+      expect(body).toContain('aria-label="Find me elsewhere"');
+      expect(body).toContain('href="https://www.twitch.tv/machinearash" rel="me noopener" aria-label="Twitch"');
+      // A generic link is named by its site.
+      expect(body).toContain('aria-label="devarash.example"');
+      expect(body.indexOf('aria-label="Twitch"')).toBeLessThan(body.indexOf('aria-label="devarash.example"'));
+      expect(body.match(/class="socials__icon"/g)).toHaveLength(2);
+    });
+
+    it('renders no strip when SOCIAL_LINKS is empty', async () => {
+      context = buildTestApp();
+      expect((await context.app.inject({ method: 'GET', url: '/' })).body).not.toContain('Find me elsewhere');
+    });
+  });
+
   describe('amount chips', () => {
     it('renders the default preset chips and a Custom chip, none chosen', async () => {
       context = buildTestApp();

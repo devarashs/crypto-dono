@@ -43,6 +43,7 @@ describe('loadConfig', () => {
         sound: { kind: 'chime' },
         imageFileName: null,
       },
+      socialLinks: [],
       leaderboardEnabled: true,
       adminPassword: null,
       filters: { messageMaxLength: 300, bannedWords: [], messageMinAmountMinor: 0, speechMinAmountMinor: 0 },
@@ -312,6 +313,39 @@ describe('loadConfig', () => {
     ['on', true],
   ])('reads LEADERBOARD=%s', (value, enabled) => {
     expect(loadConfig({ ...minimalEnvironment, LEADERBOARD: value }).leaderboardEnabled).toBe(enabled);
+  });
+
+  describe('SOCIAL_LINKS', () => {
+    it('parses platform=url pairs in order, case-insensitive platform', () => {
+      expect(
+        loadConfig({
+          ...minimalEnvironment,
+          SOCIAL_LINKS: ' Twitch=https://www.twitch.tv/me , kick=https://kick.com/me,link=https://me.example/blog?a=1 ',
+        }).socialLinks,
+      ).toEqual([
+        { platform: 'twitch', url: 'https://www.twitch.tv/me' },
+        { platform: 'kick', url: 'https://kick.com/me' },
+        { platform: 'link', url: 'https://me.example/blog?a=1' },
+      ]);
+    });
+
+    it.each([
+      ['an unknown platform', 'myspace=https://myspace.com/me', /unknown platform "myspace"/],
+      ['a missing url', 'twitch=', /should look like platform=https/],
+      ['no separator', 'https://twitch.tv/me', /should look like platform=https/],
+      ['plain http', 'twitch=http://twitch.tv/me', /must be a full https/],
+      ['a javascript: url', 'link=javascript:alert(1)', /must be a full https/],
+      ['a relative url', 'link=/about', /must be a full https/],
+    ])('rejects %s', (_label, value, pattern) => {
+      const issues = configErrorFor({ ...minimalEnvironment, SOCIAL_LINKS: value }).issues;
+      expect(issues).toHaveLength(1);
+      expect(issues[0]).toMatch(pattern);
+    });
+
+    it('caps the strip at 10 links', () => {
+      const links = Array.from({ length: 11 }, (_unused, index) => `link=https://e${index}.example`).join(',');
+      expect(configErrorFor({ ...minimalEnvironment, SOCIAL_LINKS: links }).issues).toEqual(['SOCIAL_LINKS: at most 10 links']);
+    });
   });
 
   describe('ADMIN_PASSWORD', () => {

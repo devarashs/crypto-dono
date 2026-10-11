@@ -73,6 +73,16 @@ export type DonationPageModel = {
   readonly notice?: string;
   /** The public leaderboard, or `null` when LEADERBOARD is off. */
   readonly leaderboard: LeaderboardModel | null;
+  /** The quiet strip of profile links under the page; empty for none. */
+  readonly socialLinks: readonly SocialLinkModel[];
+};
+
+export type SocialLinkModel = {
+  /** Platform name, used as the link's accessible label, e.g. "Twitch". */
+  readonly label: string;
+  readonly url: string;
+  /** 24×24 SVG path. */
+  readonly iconPath: string;
 };
 
 export type LeaderboardModel = {
@@ -148,6 +158,7 @@ export function renderDonationPage(model: DonationPageModel): SafeHtml {
         ${panel(form, { className: 'panel--donate', label: 'Donate' })}
         ${model.leaderboard !== null && panel(renderLeaderboard(model.leaderboard), { className: 'panel--board', label: 'Leaderboard' })}
       </div>
+      ${model.socialLinks.length > 0 && renderSocialLinks(model.socialLinks)}
     `,
     { wide: true },
   );
@@ -253,6 +264,21 @@ function renderLeaderboard(board: LeaderboardModel): SafeHtml {
       <div class="board__view board__view--recent" tabindex="0" aria-label="Recent donations">${recentTable}</div>
     </div>
   `;
+}
+
+/**
+ * Deliberately quiet: small muted icons after the main content, so the page's
+ * attention stays on donating. rel="me" marks them as the streamer's own
+ * profiles, which some platforms use to verify the link back.
+ */
+function renderSocialLinks(links: readonly SocialLinkModel[]): SafeHtml {
+  return html`<nav class="socials rise-in" aria-label="Find me elsewhere">
+    <ul class="socials__list">${links.map(
+      (link) => html`<li><a class="socials__link" href="${link.url}" rel="me noopener" aria-label="${link.label}" title="${link.label}">
+        <svg class="socials__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="${link.iconPath}"></path></svg>
+      </a></li>`,
+    )}</ul>
+  </nav>`;
 }
 
 /** "Oct 11, 2026", in UTC: the server cannot know the viewer's time zone. */

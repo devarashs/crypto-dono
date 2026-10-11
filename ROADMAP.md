@@ -118,5 +118,5 @@ and Share Tech Mono, hard corners, neon grid and scanlines).
       row, and anyone can donate under an existing name.
       Verified in Chromium at desktop and 375px, including the migration 4 backfill
       on existing data, name merging, opt-out, masking and the CSS tab switch.
-- [ ] 15. A small socials strip, configured by SOCIAL_LINKS, with icons copied
+- [x] 15. A small socials strip, configured by SOCIAL_LINKS, with icons copied
       from simple-icons (CC0). Empty means no strip.

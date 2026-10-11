@@ -15,6 +15,7 @@ import { formatMinorUnits, formatMoneyForDisplay } from '../money.ts';
 import type { NowPaymentsClient } from '../nowpayments/nowpayments-client.ts';
 import type { SafeHtml } from '../web/html.ts';
 import { renderDonationPage, renderErrorPage, renderThanksPage, type LeaderboardModel } from '../web/pages.ts';
+import { genericLinkIcon, socialIcons } from '../web/social-icons.ts';
 
 /** Path NOWPayments posts payment status changes to; handled by the webhook routes. */
 export const nowPaymentsWebhookPath = '/webhooks/nowpayments';
@@ -56,8 +57,15 @@ export function registerDonationRoutes(app: FastifyInstance, dependencies: Donat
     value: formatMinorUnits(amountMinor, config.donation.fractionDigits),
     label: formatMoneyForDisplay(amountMinor, config.donation.currency),
   }));
+  const socialLinks = config.socialLinks.map((link) => {
+    const icon = socialIcons[link.platform] ?? genericLinkIcon;
+    // A generic link is labelled by its site, which tells a screen reader more than "Link".
+    const label = link.platform === 'link' ? new URL(link.url).hostname : icon.title;
+    return { label, url: link.url, iconPath: icon.path };
+  });
   const pageModel = {
     streamerName: config.streamerName,
+    socialLinks,
     presets,
     messageMaxLength: config.filters.messageMaxLength,
     messageMinAmountMinor: config.filters.messageMinAmountMinor,
