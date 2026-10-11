@@ -95,6 +95,9 @@ const environmentSchema = z.object({
   // of decimals depends on DONATION_CURRENCY.
   DONATION_MIN_AMOUNT: z.preprocess(emptyAsUnset, z.string().default('1')),
   DONATION_MAX_AMOUNT: z.preprocess(emptyAsUnset, z.string().default('1000')),
+  // Comma-separated amounts offered as one-tap chips, or "none" for no chips.
+  // Unset means the defaults below, trimmed to the configured amount range.
+  DONATION_PRESETS: z.preprocess(emptyAsUnset, z.string().optional()),
 
   ALERT_DURATION_SECONDS: z.preprocess(emptyAsUnset, z.coerce.number().int().min(2).max(60).default(8)),
   ALERT_TEXT_TEMPLATE: z.preprocess(
@@ -218,6 +221,8 @@ export type Config = {
     readonly fractionDigits: number;
     readonly minAmountMinor: number;
     readonly maxAmountMinor: number;
+    /** One-tap amounts, ascending and distinct; empty for no chips. */
+    readonly presetsMinor: readonly number[];
   };
 };
 
@@ -252,6 +257,23 @@ export function loadConfig(
   }
   if (maxAmountMinor === undefined) {
     secondPassIssues.push(`DONATION_MAX_AMOUNT: must be ${amountFormat}`);
+  }
+  const presetsGiven = variables.DONATION_PRESETS !== undefined;
+  let presetsMinor = parsePresets(
+    variables.DONATION_PRESETS ?? defaultPresets,
+    fractionDigits,
+    amountFormat,
+    secondPassIssues,
+  );
+  if (minAmountMinor !== undefined && maxAmountMinor !== undefined) {
+    const inRange = (preset: number) => preset >= minAmountMinor && preset <= maxAmountMinor;
+    if (!presetsGiven) {
+      // Defaults the streamer never chose must not block startup: keep the ones
+      // that fit their range and drop the rest.
+      presetsMinor = presetsMinor.filter(inRange);
+    } else if (!presetsMinor.every(inRange)) {
+      secondPassIssues.push('DONATION_PRESETS: every amount must lie between DONATION_MIN_AMOUNT and DONATION_MAX_AMOUNT');
+    }
   }
   const messageMinAmountMinor = parseAmountToMinorUnits(variables.MESSAGE_MIN_AMOUNT, fractionDigits);
   const speechMinAmountMinor = parseAmountToMinorUnits(variables.TTS_MIN_AMOUNT, fractionDigits);
@@ -325,8 +347,43 @@ export function loadConfig(
       fractionDigits,
       minAmountMinor,
       maxAmountMinor,
+      presetsMinor,
     },
   };
+}
+
+/** Chips offered when DONATION_PRESETS is unset, in the donation currency. */
+const defaultPresets = '5,10,25,50,100';
+
+/** Upper bound on chips: beyond this they stop being a quick choice. */
+const maximumPresetCount = 8;
+
+/**
+ * Parses DONATION_PRESETS into ascending, distinct minor-unit amounts.
+ * Problems are appended to `issues` rather than thrown, so they are reported
+ * together with every other configuration problem.
+ */
+function parsePresets(list: string, fractionDigits: number, amountFormat: string, issues: string[]): number[] {
+  if (list.trim().toLowerCase() === 'none') return [];
+  const entries = list
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== '');
+  const amounts: number[] = [];
+  for (const entry of entries) {
+    const amount = parseAmountToMinorUnits(entry, fractionDigits);
+    if (amount === undefined || amount === 0) {
+      issues.push(`DONATION_PRESETS: "${entry}" is not ${amountFormat}, above zero`);
+      return [];
+    }
+    amounts.push(amount);
+  }
+  const distinct = [...new Set(amounts)].sort((a, b) => a - b);
+  if (distinct.length > maximumPresetCount) {
+    issues.push(`DONATION_PRESETS: at most ${maximumPresetCount} amounts`);
+    return [];
+  }
+  return distinct;
 }
 
 function describeIssue(
