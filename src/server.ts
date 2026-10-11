@@ -4,6 +4,8 @@
  */
 import { buildApp } from './app.ts';
 import { ConfigError, loadConfig } from './config.ts';
+import { openDatabase } from './database.ts';
+import { createDonationRepository } from './donations/donation-repository.ts';
 
 function loadConfigOrExit() {
   try {
@@ -20,7 +22,13 @@ function loadConfigOrExit() {
 }
 
 const config = loadConfigOrExit();
-const app = buildApp(config);
+// Opened, and migrated, before listening: a schema problem should stop the boot,
+// not surface as a failed donation.
+const database = openDatabase(config.databasePath);
+const app = buildApp(config, { donations: createDonationRepository(database) });
+app.addHook('onClose', async () => {
+  database.close();
+});
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
@@ -37,3 +45,4 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 
 await app.listen({ host: config.host, port: config.port });
 app.log.info(`Public address: ${config.publicBaseUrl}`);
+app.log.info(`Database: ${config.databasePath}`);

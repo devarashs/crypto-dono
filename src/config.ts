@@ -42,6 +42,9 @@ const environmentSchema = z.object({
       .url({ protocol: /^https?$/ })
       .transform((url) => url.replace(/\/+$/, '')),
   ),
+  // Relative paths resolve against the working directory, which is /app in the
+  // Docker image, so the default lands in the mounted /app/data volume.
+  DATABASE_PATH: z.preprocess(emptyAsUnset, z.string().default('data/crypto-dono.sqlite')),
 });
 
 export type Config = {
@@ -50,6 +53,7 @@ export type Config = {
   readonly logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
   /** Public origin without a trailing slash, e.g. `https://dono.example.com`. */
   readonly publicBaseUrl: string;
+  readonly databasePath: string;
 };
 
 /**
@@ -71,6 +75,7 @@ export function loadConfig(environment: Readonly<Record<string, string | undefin
     port: variables.PORT,
     logLevel: variables.LOG_LEVEL,
     publicBaseUrl: variables.PUBLIC_BASE_URL,
+    databasePath: variables.DATABASE_PATH,
   };
 }
 

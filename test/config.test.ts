@@ -20,6 +20,7 @@ describe('loadConfig', () => {
       port: 3000,
       logLevel: 'info',
       publicBaseUrl: 'https://dono.example.com',
+      databasePath: 'data/crypto-dono.sqlite',
     });
   });
 
@@ -29,8 +30,14 @@ describe('loadConfig', () => {
       HOST: '127.0.0.1',
       PORT: '8080',
       LOG_LEVEL: 'debug',
+      DATABASE_PATH: '/var/lib/dono.sqlite',
     });
-    expect(config).toMatchObject({ host: '127.0.0.1', port: 8080, logLevel: 'debug' });
+    expect(config).toMatchObject({
+      host: '127.0.0.1',
+      port: 8080,
+      logLevel: 'debug',
+      databasePath: '/var/lib/dono.sqlite',
+    });
   });
 
   it('strips trailing slashes from PUBLIC_BASE_URL', () => {
