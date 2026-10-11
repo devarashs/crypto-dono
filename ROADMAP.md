@@ -53,11 +53,13 @@ Each can be revisited; none is load-bearing enough to block work.
       output device. With "Control audio via OBS" ticked the speech disappears while
       Web Audio still plays, so browser speech can never be mixed or routed in OBS,
       and its voices depend on the streaming machine's OS.
-- [ ] 6. Donations appear as alerts in OBS: token-protected overlay, Server-Sent
+- [x] 6. Donations appear as alerts in OBS: token-protected overlay, Server-Sent
       Events, queued playback, missed alerts replayed after a reconnect.
-      Status: built and demonstrated in Chromium and Docker (live alert from a signed
-      IPN, unicode, HTML shown as text, ack after display, two missed alerts replayed
-      in order, clean console). Not yet confirmed inside OBS itself.
+      Verified in Chromium and Docker, then in OBS 32.2.2 by the streamer
+      (2026-10-11): the alert card shows, and with "Control audio via OBS" ticked the
+      chime registers on the source's mixer meter. OBS does not monitor such a source
+      by default, so the streamer only hears it after setting Audio Monitoring to
+      "Monitor and Output"; that belongs in the README.
 - [x] 6a. The streamer can send a test alert to OBS without a payment. Pulled
       forward from item 10 at the streamer's request (2026-10-11), to set up the
       overlay in OBS before the admin page exists. Protected by the overlay token.
