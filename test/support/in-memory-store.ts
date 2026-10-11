@@ -5,6 +5,7 @@
 import { openDatabase } from '../../src/database.ts';
 import { createDonationRepository } from '../../src/donations/donation-repository.ts';
 import { createLeaderboardQueries } from '../../src/donations/leaderboard.ts';
+import { createConnectionStore } from '../../src/platforms/connection-store.ts';
 
 export function createInMemoryStore(now?: () => Date) {
   const database = openDatabase(':memory:');
@@ -12,5 +13,6 @@ export function createInMemoryStore(now?: () => Date) {
     database,
     donations: createDonationRepository(database, now),
     leaderboard: createLeaderboardQueries(database),
+    connections: createConnectionStore(database, now),
   };
 }

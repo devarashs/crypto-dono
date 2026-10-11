@@ -36,10 +36,10 @@ function buildTestApp(
     STREAMER_NAME: 'Arash',
     ...environment,
   });
-  const { donations, leaderboard } = createInMemoryStore();
+  const { donations, leaderboard, connections } = createInMemoryStore();
   const createInvoice = vi.fn<NowPaymentsClient['createInvoice']>(createInvoiceImplementation);
   return {
-    app: buildApp(config, { donations, leaderboard, nowPayments: { createInvoice }, alertHub: createAlertHub() }),
+    app: buildApp(config, { donations, leaderboard, connections, nowPayments: { createInvoice }, alertHub: createAlertHub() }),
     donations,
     createInvoice,
   };

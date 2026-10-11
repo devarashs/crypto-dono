@@ -55,6 +55,7 @@ describe('POST /webhooks/nowpayments', () => {
     app = buildApp(config, {
       donations,
       leaderboard: store.leaderboard,
+        connections: store.connections,
       nowPayments: {
         createInvoice: vi.fn(async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/payment/?iid=1' })),
       },

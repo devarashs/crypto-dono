@@ -38,8 +38,34 @@ export type AdminDashboardModel = {
   /** OBS Browser Sources for the Starting Soon, Be Right Back and Ending Soon scenes. */
   readonly sceneUrls: readonly string[];
   readonly testAlertUrl: string;
+  readonly twitch: TwitchStatus;
   readonly notice?: string;
 };
+
+export type TwitchStatus =
+  | { readonly state: 'not-configured' }
+  | { readonly state: 'disconnected' }
+  | { readonly state: 'connected'; readonly login: string }
+  | { readonly state: 'revoked'; readonly login: string; readonly reason: string };
+
+/** The Twitch section of the dashboard: its status, and the one action that makes sense. */
+function renderTwitchStatus(twitch: TwitchStatus): SafeHtml {
+  switch (twitch.state) {
+    case 'not-configured':
+      return html`<p class="muted">Set TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET in .env to show follows, subs, bits and raids.</p>`;
+    case 'disconnected':
+      return html`<p class="muted">Not connected.</p>
+        <p><a class="button button--small" href="/admin/twitch/connect">Connect Twitch</a></p>`;
+    case 'connected':
+      return html`<p>Connected as <strong>${twitch.login}</strong>.</p>
+        <form method="post" action="/admin/twitch/disconnect">
+          <button class="button button--ghost button--small" type="submit">Disconnect</button>
+        </form>`;
+    case 'revoked':
+      return html`<p class="field__error">Twitch stopped sending events for ${twitch.login} (${twitch.reason}).</p>
+        <p><a class="button button--small" href="/admin/twitch/connect">Reconnect Twitch</a></p>`;
+  }
+}
 
 export function renderAdminDashboard(model: AdminDashboardModel): SafeHtml {
   const filterQuery = model.showUnpaid ? '&all=1' : '';
@@ -63,7 +89,11 @@ export function renderAdminDashboard(model: AdminDashboardModel): SafeHtml {
         <dt>Test alert</dt>
         <dd><a class="link" href="${model.testAlertUrl}">Open the test-alert page</a></dd>
       </dl>
-      <p class="footnote">Both links contain your overlay token. Keep them off stream.</p>
+      <p class="footnote">These links contain your overlay token. Keep them off stream.</p>
+      <section class="admin-platform" aria-label="Twitch">
+        <h2 class="panel__title">Twitch alerts</h2>
+        ${renderTwitchStatus(model.twitch)}
+      </section>
       <nav class="tabs" aria-label="Filter donations">
         ${model.showUnpaid
           ? html`<a class="tabs__tab" href="/admin">Paid only</a><span class="tabs__tab tabs__tab--current" aria-current="page">All, including unpaid</span>`

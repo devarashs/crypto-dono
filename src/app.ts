@@ -18,6 +18,9 @@ import type { StreamEvent } from './events/stream-event.ts';
 import type { Config } from './config.ts';
 import type { DonationRepository } from './donations/donation-repository.ts';
 import type { LeaderboardQueries } from './donations/leaderboard.ts';
+import type { ConnectionStore } from './platforms/connection-store.ts';
+import { registerTwitchWebhookRoutes, twitchWebhookPath } from './routes/twitch-webhook-routes.ts';
+import type { TwitchApi } from './twitch/twitch-api.ts';
 import type { NowPaymentsClient } from './nowpayments/nowpayments-client.ts';
 import { registerAdminRoutes } from './routes/admin-routes.ts';
 import { registerDonationRoutes, sendHtml } from './routes/donation-routes.ts';
@@ -31,6 +34,10 @@ export type AppDependencies = {
   readonly donations: DonationRepository;
   /** Read-only queries behind the public leaderboard. */
   readonly leaderboard: LeaderboardQueries;
+  /** Which platform channels are linked (Twitch, ...), and webhook de-duplication. */
+  readonly connections: ConnectionStore;
+  /** Present when Twitch is configured: its API client and the EventSub signing secret. */
+  readonly twitch?: { readonly api: TwitchApi; readonly eventSubSecret: string };
   readonly nowPayments: NowPaymentsClient;
   /** Receives each donation's alert once, and fans it out to connected overlays. */
   readonly alertHub: AlertHub;
@@ -186,6 +193,17 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
     });
   });
 
+  const twitch = config.twitch !== null ? dependencies.twitch : undefined;
+  if (twitch !== undefined) {
+    app.register(async (scope) => {
+      registerTwitchWebhookRoutes(scope, {
+        connections: dependencies.connections,
+        eventSubSecret: twitch.eventSubSecret,
+        publishEvent,
+      });
+    });
+  }
+
   const { adminPassword } = config;
   if (adminPassword !== null) {
     if (dependencies.adminSessionSecret === undefined) {
@@ -200,6 +218,10 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
         presentAlert,
         publishAlert,
         sessionSecret,
+        connections: dependencies.connections,
+        ...(twitch !== undefined && {
+          twitch: { ...twitch, callbackUrl: `${config.publicBaseUrl}${twitchWebhookPath}` },
+        }),
       });
     });
   }

@@ -63,6 +63,7 @@ describe('message filters, end to end', () => {
     app = buildApp(config, {
       donations,
       leaderboard: store.leaderboard,
+        connections: store.connections,
       nowPayments: { createInvoice: async () => ({ invoiceId: 'inv', invoiceUrl: 'https://nowpayments.io/x' }) },
       alertHub,
       alertSpeech: createAlertSpeech({ synthesize }),

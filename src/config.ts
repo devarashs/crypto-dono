@@ -164,6 +164,10 @@ const environmentSchema = z.object({
 
   // Comma-separated platform=url pairs for the socials strip, in display order.
   SOCIAL_LINKS: z.preprocess(emptyAsUnset, z.string().default('')),
+  // Twitch app credentials (dev.twitch.tv/console). Both or neither; with
+  // neither, Twitch alerts are simply not offered.
+  TWITCH_CLIENT_ID: z.preprocess(emptyAsUnset, z.string().trim().regex(/^[a-z0-9]+$/, 'should be the Client ID from dev.twitch.tv/console').optional()),
+  TWITCH_CLIENT_SECRET: z.preprocess(emptyAsUnset, z.string().trim().min(1).optional()),
   // The public donor leaderboard on the donation page.
   LEADERBOARD: z.preprocess(emptyAsUnset, z.stringbool().default(true)),
 
@@ -239,6 +243,8 @@ export type Config = {
   };
   /** Links in the socials strip, in display order; empty for no strip. */
   readonly socialLinks: readonly SocialLink[];
+  /** Twitch app credentials, or `null` when Twitch is not configured. */
+  readonly twitch: { readonly clientId: string; readonly clientSecret: string } | null;
   /** Whether the donation page shows the public leaderboard. */
   readonly leaderboardEnabled: boolean;
   /** Admin page password, or `null` when the admin page is disabled. */
@@ -327,6 +333,9 @@ export function loadConfig(
     }
   }
   const socialLinks = parseSocialLinks(variables.SOCIAL_LINKS, secondPassIssues);
+  if ((variables.TWITCH_CLIENT_ID === undefined) !== (variables.TWITCH_CLIENT_SECRET === undefined)) {
+    secondPassIssues.push('TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET: set both, or neither');
+  }
   const messageMinAmountMinor = parseAmountToMinorUnits(variables.MESSAGE_MIN_AMOUNT, fractionDigits);
   const speechMinAmountMinor = parseAmountToMinorUnits(variables.TTS_MIN_AMOUNT, fractionDigits);
   if (messageMinAmountMinor === undefined) secondPassIssues.push(`MESSAGE_MIN_AMOUNT: must be ${amountFormat}`);
@@ -417,6 +426,10 @@ export function loadConfig(
       imageFileName: variables.ALERT_IMAGE ?? null,
     },
     socialLinks,
+    twitch:
+      variables.TWITCH_CLIENT_ID !== undefined && variables.TWITCH_CLIENT_SECRET !== undefined
+        ? { clientId: variables.TWITCH_CLIENT_ID, clientSecret: variables.TWITCH_CLIENT_SECRET }
+        : null,
     leaderboardEnabled: variables.LEADERBOARD,
     adminPassword: variables.ADMIN_PASSWORD ?? null,
     filters: {
