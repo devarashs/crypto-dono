@@ -90,6 +90,23 @@ describe('app', () => {
     expect(response.headers['referrer-policy']).toBe('no-referrer');
   });
 
+  it('serves the two self-hosted fonts and nothing else from node_modules', async () => {
+    context = buildTestApp();
+    for (const file of ['orbitron-latin-wght-normal.woff2', 'share-tech-mono-latin-400-normal.woff2']) {
+      const response = await context.app.inject({ method: 'GET', url: `/fonts/${file}` });
+      expect(response.statusCode, file).toBe(200);
+      expect(response.headers['content-type'], file).toBe('font/woff2');
+    }
+    for (const url of [
+      '/fonts/orbitron-latin-wght-italic.woff2',
+      '/fonts/../package.json',
+      '/fonts/%2e%2e/%2e%2e/package.json',
+      '/fonts/LICENSE',
+    ]) {
+      expect((await context.app.inject({ method: 'GET', url })).statusCode, url).toBe(404);
+    }
+  });
+
   it('serves the stylesheet', async () => {
     context = buildTestApp();
     const response = await context.app.inject({ method: 'GET', url: '/static/styles.css' });

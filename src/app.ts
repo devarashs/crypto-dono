@@ -36,6 +36,19 @@ export type AppDependencies = {
 const publicDirectory = fileURLToPath(new URL('../public/', import.meta.url));
 
 /**
+ * Self-hosted fonts, served straight from their npm packages so upgrades come
+ * through npm and the licences ship alongside. Only these two files are served:
+ * the rest of node_modules is never reachable.
+ */
+const fontFiles = new Map([
+  ['orbitron-latin-wght-normal.woff2', '../node_modules/@fontsource-variable/orbitron/files/'],
+  ['share-tech-mono-latin-400-normal.woff2', '../node_modules/@fontsource/share-tech-mono/files/'],
+]);
+const fontDirectories = [...new Set(fontFiles.values())].map((directory) =>
+  fileURLToPath(new URL(directory, import.meta.url)),
+);
+
+/**
  * Applied to every response. The pages load nothing from other origins and use no
  * inline script or style, so the policy can be strict.
  *
@@ -116,6 +129,15 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
     }),
   });
   app.register(fastifyStatic, { root: publicDirectory, prefix: '/static/' });
+  app.register(fastifyStatic, {
+    root: fontDirectories,
+    prefix: '/fonts/',
+    // The first registration already added reply.sendFile.
+    decorateReply: false,
+    allowedPath: (pathName) => fontFiles.has(pathName.replace(/^\//, '')),
+    // Font files never change under the same name within a release.
+    maxAge: '7d',
+  });
 
   // Liveness probe for Docker's HEALTHCHECK and for uptime monitors.
   app.get('/healthz', async () => ({ status: 'ok' }));
