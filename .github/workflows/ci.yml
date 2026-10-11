@@ -39,7 +39,7 @@ jobs:
             -e NOWPAYMENTS_API_KEY=ci -e NOWPAYMENTS_IPN_SECRET=ci \
             -e OVERLAY_TOKEN=ci-overlay-token-0123456789abcdef \
             crypto-dono:ci
-          for attempt in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             curl -fsS http://localhost:3000/healthz && exit 0
             sleep 1
           done
@@ -47,3 +47,35 @@ jobs:
           exit 1
       - name: Build the optional Piper image
         run: docker build -t crypto-dono-piper:ci piper
+
+  # Deploys main to the server once both checks pass. Configured per repository:
+  #   variables: DEPLOY_HOST (server address), DEPLOY_KNOWN_HOSTS (its SSH host key)
+  #   secret:    DEPLOY_SSH_KEY (private key; the server only lets it run deploy/update.sh)
+  # Forks and unconfigured copies skip this job instead of failing.
+  deploy:
+    needs: [test, docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_HOST != ''
+    runs-on: ubuntu-latest
+    # Two quick pushes queue up rather than deploying over each other.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    environment:
+      name: production
+      url: https://dono.devarash.icu
+    steps:
+      - name: Deploy over SSH
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Pinned host key: refuse to talk to anything but the real server.
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # The server ignores the command and runs deploy/update.sh; its output
+          # and exit code become this step's.
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o BatchMode=yes \
+            -o ServerAliveInterval=30 "ubuntu@$DEPLOY_HOST" deploy
