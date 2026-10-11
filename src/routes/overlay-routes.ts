@@ -4,6 +4,8 @@
  *   GET  /overlay/:token                      the page
  *   GET  /overlay/:token/events               Server-Sent Events stream of alerts
  *   POST /overlay/:token/alerts/:id/shown     the overlay finished showing an alert
+ *   GET  /overlay/:token/assets/sound         the streamer's custom alert sound, if set
+ *   GET  /overlay/:token/assets/image         the streamer's custom alert image, if set
  *   GET  /overlay/:token/test                 form for sending a test alert
  *   POST /overlay/:token/test                 send a test alert to connected overlays
  *
@@ -33,9 +35,6 @@ export const alertReplayWindowMs = 24 * 60 * 60 * 1000;
  * proxies close a response that is silent for about 100 seconds.
  */
 const heartbeatIntervalMs = 15_000;
-
-/** How long each alert stays on screen. Becomes configurable with the alert styling. */
-const alertDurationMs = 8_000;
 
 export type OverlayRouteDependencies = {
   readonly config: Config;
@@ -78,9 +77,14 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
     <meta charset="utf-8">
     <title>Donation alerts</title>
     <link rel="stylesheet" href="/static/overlay.css">
-    <script src="/static/overlay.js" defer></script>
+    <script src="/static/overlay.js" type="module"></script>
   </head>
-  <body data-events-url="${request.params.token}/events" data-alert-duration-ms="${alertDurationMs}">
+  <body
+    data-events-url="${request.params.token}/events"
+    data-alert-duration-ms="${config.alert.durationMs}"
+    data-text-template="${config.alert.textTemplate}"
+    data-sound="${config.alert.sound.kind === 'file' ? `${request.params.token}/assets/sound` : config.alert.sound.kind}"
+    data-image-url="${config.alert.imageFileName === null ? '' : `${request.params.token}/assets/image`}">
     <div id="alert-stage" aria-live="polite"></div>
   </body>
 </html>`;
@@ -96,6 +100,19 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
     // program in OBS) can show the same alert and each acknowledges it.
     donations.markAlertShown(request.params.id);
     return reply.code(204).send();
+  });
+
+  // Fixed routes rather than serving the folder, so only the two configured files
+  // are reachable and a file name can never be used to wander the disk.
+  app.get<{ Params: TokenParams }>('/overlay/:token/assets/sound', async (_request, reply) => {
+    const { sound } = config.alert;
+    if (sound.kind !== 'file') return reply.callNotFound();
+    return reply.sendFile(sound.fileName, config.alert.assetsDirectory);
+  });
+
+  app.get<{ Params: TokenParams }>('/overlay/:token/assets/image', async (_request, reply) => {
+    if (config.alert.imageFileName === null) return reply.callNotFound();
+    return reply.sendFile(config.alert.imageFileName, config.alert.assetsDirectory);
   });
 
   const defaultTestValues: DonationFormValues = {

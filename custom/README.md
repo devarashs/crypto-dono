@@ -1,0 +1,19 @@
+# Custom alert assets
+
+Put your own alert sound and image in this folder, then name them in `.env`:
+
+```
+ALERT_SOUND=cash-register.mp3
+ALERT_IMAGE=party.gif
+```
+
+- Sound: `.mp3`, `.ogg`, `.wav` or `.m4a`. Leave `ALERT_SOUND` empty for the
+  built-in chime, or set it to `none` for silence.
+- Image: `.gif`, `.png`, `.webp`, `.jpg`, `.jpeg` or `.avif`, shown above the
+  alert text. Animated GIFs and WebPs play as normal.
+- Plain file names only, no sub-folders.
+- The service checks both files at startup and refuses to start if one is
+  missing, so a typo shows up immediately instead of mid-stream.
+
+Only the two files named in `.env` are ever served, and only through the secret
+overlay URL. Everything else in this folder stays private, and git ignores it.

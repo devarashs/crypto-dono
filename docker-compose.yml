@@ -11,6 +11,9 @@ services:
       # unprivileged user cannot write. Back up with:
       #   docker compose cp crypto-dono:/app/data ./backup
       - crypto-dono-data:/app/data
+      # Your own alert sound and image, see custom/README.md. Read-only: the
+      # service never writes here.
+      - ./custom:/app/custom:ro
 
 volumes:
   crypto-dono-data:

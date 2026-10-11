@@ -5,13 +5,20 @@
  * Alerts arrive over Server-Sent Events and play one at a time from a queue, so
  * donations that land together are each shown in full. After an alert has been
  * shown it is acknowledged, which stops the server replaying it on reconnect.
+ *
+ * Settings arrive as data attributes on <body>, rendered from the streamer's .env.
  */
-'use strict';
+import { splitAlertTemplate } from './alert-template.js';
 
 const stage = document.getElementById('alert-stage');
+const settings = document.body.dataset;
 // Relative to the page URL (/overlay/<token>), so the token is never hard-coded.
-const eventsUrl = new URL(document.body.dataset.eventsUrl, window.location.href);
-const alertDurationMs = Number(document.body.dataset.alertDurationMs) || 8000;
+const eventsUrl = new URL(settings.eventsUrl, window.location.href);
+const alertDurationMs = Number(settings.alertDurationMs) || 8000;
+const templateParts = splitAlertTemplate(settings.textTemplate || '{name} donated {amount}');
+/** "chime", "none", or the URL of the streamer's own sound. */
+const soundSetting = settings.sound || 'chime';
+const imageUrl = settings.imageUrl ? new URL(settings.imageUrl, window.location.href).href : '';
 /** Matches --overlay-exit-duration, plus a little slack before the next alert. */
 const exitDurationMs = 200;
 const gapBetweenAlertsMs = 600;
@@ -45,7 +52,7 @@ async function showAlert(alert) {
   // Forces a style flush so the transition runs from the hidden state.
   void card.offsetWidth;
   card.classList.add('is-visible');
-  playChime();
+  playAlertSound();
   await wait(alertDurationMs);
   card.classList.remove('is-visible');
   await wait(exitDurationMs);
@@ -57,12 +64,28 @@ function renderCard(alert) {
   const card = document.createElement('div');
   card.className = 'alert-card';
 
+  if (imageUrl !== '') {
+    const image = document.createElement('img');
+    image.className = 'alert-image';
+    image.src = imageUrl;
+    image.alt = '';
+    card.append(image);
+  }
+
   const headline = document.createElement('p');
   headline.className = 'alert-headline';
-  const amount = document.createElement('span');
-  amount.className = 'alert-amount';
-  amount.textContent = alert.amount;
-  headline.append(`${alert.donorName} donated `, amount);
+  for (const part of templateParts) {
+    if (part.type === 'text') {
+      headline.append(part.value);
+    } else if (part.type === 'name') {
+      headline.append(alert.donorName);
+    } else {
+      const amount = document.createElement('span');
+      amount.className = 'alert-amount';
+      amount.textContent = alert.amount;
+      headline.append(amount);
+    }
+  }
   card.append(headline);
 
   if (alert.message !== '') {
@@ -81,6 +104,20 @@ function acknowledge(id) {
 }
 
 let audioContext;
+let customSound;
+
+function playAlertSound() {
+  if (soundSetting === 'none') return;
+  if (soundSetting === 'chime') {
+    playChime();
+    return;
+  }
+  // One element reused, so the file is fetched once and then served from cache.
+  customSound ??= new Audio(new URL(soundSetting, window.location.href).href);
+  customSound.currentTime = 0;
+  // Rejected when the browser blocks autoplay; OBS does not, a normal tab may.
+  customSound.play().catch(() => {});
+}
 
 /**
  * A short two-note chime synthesised with Web Audio, so the default needs no
