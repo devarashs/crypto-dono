@@ -1,0 +1,16 @@
+services:
+  crypto-dono:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    volumes:
+      # A named volume rather than a ./data bind mount: on Linux, Docker creates a
+      # missing bind-mount directory owned by root, which the container's
+      # unprivileged user cannot write. Back up with:
+      #   docker compose cp crypto-dono:/app/data ./backup
+      - crypto-dono-data:/app/data
+
+volumes:
+  crypto-dono-data:

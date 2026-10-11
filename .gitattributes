@@ -1,0 +1,3 @@
+# Normalise line endings so the Docker image and shell scripts behave the same
+# whether the repository was cloned on Windows or Unix.
+* text=auto eol=lf

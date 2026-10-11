@@ -28,9 +28,9 @@ Each can be revisited; none is load-bearing enough to block work.
 
 ## Phase 0 — Foundations
 
-- [ ] 1. The service boots from `.env` and refuses to start, with a clear error, when
+- [x] 1. The service boots from `.env` and refuses to start, with a clear error, when
       configuration is missing or invalid. Docker image and compose file included.
-- [ ] 2. Donations are stored durably in SQLite, with migrations.
+- [x] 2. Donations are stored durably in SQLite, with migrations.
 
 ## Phase 1 — Money path
 
