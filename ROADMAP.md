@@ -63,8 +63,9 @@ Each can be revisited; none is load-bearing enough to block work.
 - [x] 6a. The streamer can send a test alert to OBS without a payment. Pulled
       forward from item 10 at the streamer's request (2026-10-11), to set up the
       overlay in OBS before the admin page exists. Protected by the overlay token.
-- [ ] 7. The streamer can restyle alerts (sound, image, duration, template) without
-      touching code.
+- [x] 7. The streamer can restyle alerts (sound, image, duration, template) without
+      touching code. Verified in Chromium (custom WAV, PNG, wording, 6 s duration) and
+      in Docker through the read-only ./custom mount.
 - [ ] 8. Donation messages are read aloud (design per item 5).
       Decided 2026-10-11: server-side synthesis with Piper, so speech flows through
       the overlay's own audio and therefore through OBS's mixer. Piper runs as a

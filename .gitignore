@@ -2,3 +2,7 @@ node_modules/
 .env
 data/
 coverage/
+
+# Streamer-provided alert assets; only the instructions are tracked.
+custom/*
+!custom/README.md

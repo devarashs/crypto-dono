@@ -1,4 +1,7 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { request as httpRequest, type IncomingMessage } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
@@ -86,7 +89,11 @@ describe('overlay routes', () => {
     it('serves the overlay page with a policy that allows its own script', async () => {
       const response = await app.inject({ method: 'GET', url: `/overlay/${token}` });
       expect(response.statusCode).toBe(200);
-      expect(response.body).toContain('src="/static/overlay.js"');
+      expect(response.body).toContain('src="/static/overlay.js" type="module"');
+      expect(response.body).toContain('data-alert-duration-ms="8000"');
+      expect(response.body).toContain('data-text-template="{name} donated {amount}"');
+      expect(response.body).toContain('data-sound="chime"');
+      expect(response.body).toContain('data-image-url=""');
       expect(response.body).toContain(`data-events-url="${token}/events"`);
       expect(response.headers['content-security-policy']).toContain("script-src 'self'");
       expect(response.headers['content-security-policy']).toContain("connect-src 'self'");
@@ -117,6 +124,7 @@ describe('overlay routes', () => {
     it('serves the overlay script and stylesheet', async () => {
       for (const [file, type] of [
         ['overlay.js', /javascript/],
+        ['alert-template.js', /javascript/],
         ['overlay.css', /text\/css/],
         ['tokens.css', /text\/css/],
       ] as const) {
@@ -188,6 +196,91 @@ describe('overlay routes', () => {
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
       expect(alertHub.subscriberCount).toBe(0);
+    });
+  });
+
+  describe('custom alert assets', () => {
+    let assetsDirectory: string;
+    let customApp: FastifyInstance;
+
+    beforeEach(() => {
+      assetsDirectory = mkdtempSync(join(tmpdir(), 'crypto-dono-assets-'));
+      writeFileSync(join(assetsDirectory, 'cash.mp3'), 'fake mp3 bytes');
+      writeFileSync(join(assetsDirectory, 'party.gif'), 'GIF89a fake');
+      writeFileSync(join(assetsDirectory, 'other.txt'), 'not configured');
+    });
+    afterEach(async () => {
+      await customApp?.close();
+      rmSync(assetsDirectory, { recursive: true, force: true });
+    });
+
+    function buildCustomApp(overrides: Record<string, string>) {
+      const config = loadConfig({
+        PUBLIC_BASE_URL: 'https://dono.example.com',
+        NOWPAYMENTS_API_KEY: 'k',
+        NOWPAYMENTS_IPN_SECRET: 's',
+        OVERLAY_TOKEN: token,
+        LOG_LEVEL: 'fatal',
+        CUSTOM_ASSETS_DIR: assetsDirectory,
+        ...overrides,
+      });
+      customApp = buildApp(config, {
+        donations: createDonationRepository(openDatabase(':memory:')),
+        nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
+        alertHub: createAlertHub(),
+      });
+      return customApp;
+    }
+
+    it('passes the configured settings to the page and serves the two files', async () => {
+      const custom = buildCustomApp({
+        ALERT_SOUND: 'cash.mp3',
+        ALERT_IMAGE: 'party.gif',
+        ALERT_DURATION_SECONDS: '5',
+        ALERT_TEXT_TEMPLATE: '<b>{name}</b> & {amount}',
+      });
+      const page = await custom.inject({ method: 'GET', url: `/overlay/${token}` });
+      expect(page.body).toContain(`data-sound="${token}/assets/sound"`);
+      expect(page.body).toContain(`data-image-url="${token}/assets/image"`);
+      expect(page.body).toContain('data-alert-duration-ms="5000"');
+      // Escaped into the attribute; the overlay later inserts it as text, never HTML.
+      expect(page.body).toContain('data-text-template="&lt;b&gt;{name}&lt;/b&gt; &amp; {amount}"');
+
+      const sound = await custom.inject({ method: 'GET', url: `/overlay/${token}/assets/sound` });
+      expect(sound.statusCode).toBe(200);
+      expect(sound.headers['content-type']).toBe('audio/mpeg');
+      expect(sound.body).toBe('fake mp3 bytes');
+
+      const image = await custom.inject({ method: 'GET', url: `/overlay/${token}/assets/image` });
+      expect(image.statusCode).toBe(200);
+      expect(image.headers['content-type']).toBe('image/gif');
+    });
+
+    it('marks the sound as none when silenced', async () => {
+      const page = await buildCustomApp({ ALERT_SOUND: 'none' }).inject({ method: 'GET', url: `/overlay/${token}` });
+      expect(page.body).toContain('data-sound="none"');
+    });
+
+    it('answers 404 for assets that are not configured', async () => {
+      const custom = buildCustomApp({});
+      for (const asset of ['sound', 'image']) {
+        const response = await custom.inject({ method: 'GET', url: `/overlay/${token}/assets/${asset}` });
+        expect(response.statusCode, asset).toBe(404);
+      }
+    });
+
+    it('serves nothing else from the folder, and nothing without the token', async () => {
+      const custom = buildCustomApp({ ALERT_SOUND: 'cash.mp3' });
+      for (const url of [
+        `/overlay/${token}/assets/other.txt`,
+        `/overlay/${token}/assets/../assets/sound/../../other.txt`,
+        '/overlay/wrong-token-wrong-token-wrong/assets/sound',
+        '/custom/cash.mp3',
+      ]) {
+        const response = await custom.inject({ method: 'GET', url });
+        expect(response.statusCode, url).toBe(404);
+        expect(response.body).not.toContain('not configured');
+      }
     });
   });
 

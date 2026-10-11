@@ -5,6 +5,8 @@
  * with a message naming the variable, rather than at the first donation. The
  * documented list of variables lives in `.env.example`; keep the two in sync.
  */
+import { statSync } from 'node:fs';
+import { extname, resolve } from 'node:path';
 import { z } from 'zod';
 import { alertThresholdStatuses, type AlertThresholdStatus } from './donations/payment-status.ts';
 import { currencyFractionDigits, parseAmountToMinorUnits } from './money.ts';
@@ -93,7 +95,41 @@ const environmentSchema = z.object({
   // of decimals depends on DONATION_CURRENCY.
   DONATION_MIN_AMOUNT: z.preprocess(emptyAsUnset, z.string().default('1')),
   DONATION_MAX_AMOUNT: z.preprocess(emptyAsUnset, z.string().default('1000')),
+
+  ALERT_DURATION_SECONDS: z.preprocess(emptyAsUnset, z.coerce.number().int().min(2).max(60).default(8)),
+  ALERT_TEXT_TEMPLATE: z.preprocess(
+    emptyAsUnset,
+    z.string().trim().min(1).max(120).default('{name} donated {amount}'),
+  ),
+  // Folder holding the streamer's own alert sound and image. Relative paths
+  // resolve against the working directory (/app in Docker, mounted from ./custom).
+  CUSTOM_ASSETS_DIR: z.preprocess(emptyAsUnset, z.string().default('custom')),
+  // Empty: the built-in chime. "none": silent. Otherwise a file name in CUSTOM_ASSETS_DIR.
+  ALERT_SOUND: z.preprocess(emptyAsUnset, z.string().trim().optional()),
+  // Empty: no image. Otherwise a file name in CUSTOM_ASSETS_DIR.
+  ALERT_IMAGE: z.preprocess(emptyAsUnset, z.string().trim().optional()),
 });
+
+/** Plain file names only: no directories, so a setting can never point outside the folder. */
+const assetFileNamePattern = /^[A-Za-z0-9_][A-Za-z0-9_. -]*$/;
+const soundExtensions = ['.mp3', '.ogg', '.wav', '.m4a'];
+const imageExtensions = ['.gif', '.png', '.webp', '.jpg', '.jpeg', '.avif'];
+
+/** Reports whether a path is an existing regular file. Injected so tests need no real files. */
+export type FileExists = (path: string) => boolean;
+
+const fileExistsOnDisk: FileExists = (path) => {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+};
+
+export type AlertSound =
+  | { readonly kind: 'chime' }
+  | { readonly kind: 'none' }
+  | { readonly kind: 'file'; readonly fileName: string };
 
 export type Config = {
   readonly host: string;
@@ -114,6 +150,16 @@ export type Config = {
   readonly alertOnStatus: AlertThresholdStatus;
   /** Secret path segment of the OBS overlay URL. */
   readonly overlayToken: string;
+  readonly alert: {
+    readonly durationMs: number;
+    /** Headline wording; `{name}` and `{amount}` are replaced per donation. */
+    readonly textTemplate: string;
+    /** Absolute path of the folder custom sounds and images are read from. */
+    readonly assetsDirectory: string;
+    readonly sound: AlertSound;
+    /** File name in `assetsDirectory`, or `null` for no image. */
+    readonly imageFileName: string | null;
+  };
   readonly donation: {
     /** Lower-case ISO 4217 code. */
     readonly currency: string;
@@ -133,7 +179,10 @@ export type Config = {
  *   The donation amount range is checked in a second pass, because its decimals
  *   depend on DONATION_CURRENCY being valid first.
  */
-export function loadConfig(environment: Readonly<Record<string, string | undefined>>): Config {
+export function loadConfig(
+  environment: Readonly<Record<string, string | undefined>>,
+  fileExists: FileExists = fileExistsOnDisk,
+): Config {
   const parsed = environmentSchema.safeParse(environment);
   if (!parsed.success) {
     throw new ConfigError(parsed.error.issues.map((issue) => describeIssue(issue, environment)));
@@ -141,21 +190,42 @@ export function loadConfig(environment: Readonly<Record<string, string | undefin
   const variables = parsed.data;
 
   const fractionDigits = currencyFractionDigits(variables.DONATION_CURRENCY);
-  const amountIssues: string[] = [];
+  // Second pass: checks that depend on more than one variable or on the disk.
+  const secondPassIssues: string[] = [];
   const minAmountMinor = parseAmountToMinorUnits(variables.DONATION_MIN_AMOUNT, fractionDigits);
   const maxAmountMinor = parseAmountToMinorUnits(variables.DONATION_MAX_AMOUNT, fractionDigits);
   const amountFormat = `a plain amount with at most ${fractionDigits} decimals, such as ${fractionDigits > 0 ? '2.50' : '250'}`;
   if (minAmountMinor === undefined || minAmountMinor === 0) {
-    amountIssues.push(`DONATION_MIN_AMOUNT: must be ${amountFormat}, and above zero`);
+    secondPassIssues.push(`DONATION_MIN_AMOUNT: must be ${amountFormat}, and above zero`);
   }
   if (maxAmountMinor === undefined) {
-    amountIssues.push(`DONATION_MAX_AMOUNT: must be ${amountFormat}`);
+    secondPassIssues.push(`DONATION_MAX_AMOUNT: must be ${amountFormat}`);
   }
   if (minAmountMinor !== undefined && maxAmountMinor !== undefined && maxAmountMinor < minAmountMinor) {
-    amountIssues.push('DONATION_MAX_AMOUNT: must not be below DONATION_MIN_AMOUNT');
+    secondPassIssues.push('DONATION_MAX_AMOUNT: must not be below DONATION_MIN_AMOUNT');
   }
-  if (amountIssues.length > 0 || minAmountMinor === undefined || maxAmountMinor === undefined) {
-    throw new ConfigError(amountIssues);
+
+  const assetsDirectory = resolve(variables.CUSTOM_ASSETS_DIR);
+  const checkAsset = (variableName: string, fileName: string, allowedExtensions: readonly string[]) => {
+    if (!assetFileNamePattern.test(fileName)) {
+      secondPassIssues.push(`${variableName}: must be a plain file name inside CUSTOM_ASSETS_DIR, without folders`);
+    } else if (!allowedExtensions.includes(extname(fileName).toLowerCase())) {
+      secondPassIssues.push(`${variableName}: must end in one of ${allowedExtensions.join(', ')}`);
+    } else if (!fileExists(resolve(assetsDirectory, fileName))) {
+      secondPassIssues.push(`${variableName}: no file named "${fileName}" in ${assetsDirectory}`);
+    }
+  };
+  let sound: AlertSound = { kind: 'chime' };
+  if (variables.ALERT_SOUND !== undefined && variables.ALERT_SOUND.toLowerCase() === 'none') {
+    sound = { kind: 'none' };
+  } else if (variables.ALERT_SOUND !== undefined) {
+    checkAsset('ALERT_SOUND', variables.ALERT_SOUND, soundExtensions);
+    sound = { kind: 'file', fileName: variables.ALERT_SOUND };
+  }
+  if (variables.ALERT_IMAGE !== undefined) checkAsset('ALERT_IMAGE', variables.ALERT_IMAGE, imageExtensions);
+
+  if (secondPassIssues.length > 0 || minAmountMinor === undefined || maxAmountMinor === undefined) {
+    throw new ConfigError(secondPassIssues);
   }
 
   return {
@@ -173,6 +243,13 @@ export function loadConfig(environment: Readonly<Record<string, string | undefin
     },
     alertOnStatus: variables.ALERT_ON_STATUS,
     overlayToken: variables.OVERLAY_TOKEN,
+    alert: {
+      durationMs: variables.ALERT_DURATION_SECONDS * 1000,
+      textTemplate: variables.ALERT_TEXT_TEMPLATE,
+      assetsDirectory,
+      sound,
+      imageFileName: variables.ALERT_IMAGE ?? null,
+    },
     donation: {
       currency: variables.DONATION_CURRENCY,
       fractionDigits,
