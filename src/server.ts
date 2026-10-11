@@ -6,6 +6,7 @@ import { buildApp } from './app.ts';
 import { ConfigError, loadConfig } from './config.ts';
 import { openDatabase } from './database.ts';
 import { createDonationRepository } from './donations/donation-repository.ts';
+import { createNowPaymentsClient } from './nowpayments/nowpayments-client.ts';
 
 function loadConfigOrExit() {
   try {
@@ -40,7 +41,13 @@ const config = loadConfigOrExit();
 // Opened, and migrated, before listening: a schema problem should stop the boot,
 // not surface as a failed donation.
 const database = openDatabaseOrExit(config.databasePath);
-const app = buildApp(config, { donations: createDonationRepository(database) });
+const app = buildApp(config, {
+  donations: createDonationRepository(database),
+  nowPayments: createNowPaymentsClient({
+    apiKey: config.nowPayments.apiKey,
+    baseUrl: config.nowPayments.baseUrl,
+  }),
+});
 app.addHook('onClose', async () => {
   database.close();
 });
@@ -61,3 +68,4 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 await app.listen({ host: config.host, port: config.port });
 app.log.info(`Public address: ${config.publicBaseUrl}`);
 app.log.info(`Database: ${config.databasePath}`);
+app.log.info(`NOWPayments: ${config.nowPayments.sandbox ? 'sandbox' : 'production'}`);
