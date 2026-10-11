@@ -2,8 +2,8 @@
  * Server-rendered public pages. No client-side JavaScript: the donation flow is
  * a plain form, so it works on any device and loads instantly on mobile data.
  */
-import type { DonationFormErrors, DonationFormValues } from '../donations/donation-form.ts';
-import { formatMoneyForDisplay } from '../money.ts';
+import { customAmountChip, type DonationFormErrors, type DonationFormValues } from '../donations/donation-form.ts';
+import { formatMoneyForDisplay, parseAmountToMinorUnits } from '../money.ts';
 import { html, type SafeHtml } from './html.ts';
 
 /**
@@ -62,6 +62,8 @@ export type DonationPageModel = {
   readonly fractionDigits: number;
   readonly minAmountMinor: number;
   readonly maxAmountMinor: number;
+  /** One-tap amounts; empty shows a plain amount field instead of chips. */
+  readonly presets: readonly AmountPreset[];
   readonly messageMaxLength: number;
   /** Messages are only shown on stream for donations of at least this much. */
   readonly messageMinAmountMinor: number;
@@ -69,6 +71,13 @@ export type DonationPageModel = {
   readonly errors?: DonationFormErrors;
   /** A one-line message above the form, e.g. after a cancelled payment. */
   readonly notice?: string;
+};
+
+export type AmountPreset = {
+  /** Plain decimal submitted with the form, e.g. "10.00". */
+  readonly value: string;
+  /** Shown on the chip, e.g. "$10.00". */
+  readonly label: string;
 };
 
 export function renderDonationPage(model: DonationPageModel): SafeHtml {
@@ -89,13 +98,15 @@ export function renderDonationPage(model: DonationPageModel): SafeHtml {
         control: html`<input class="input" id="donorName" name="donorName" autocomplete="nickname"
           value="${values.donorName}" placeholder="Anonymous"${errorAttributes('donorName', errors.donorName)}>`,
       })}
-      ${renderField({
-        id: 'amount',
-        label: 'Amount',
-        error: errors.amount,
-        hint: errors.amount === undefined ? `Minimum ${minimum}` : undefined,
-        control: amountInput(model.currency, values.amount, errors.amount, true),
-      })}
+      ${model.presets.length === 0
+        ? renderField({
+            id: 'amount',
+            label: 'Amount',
+            error: errors.amount,
+            hint: errors.amount === undefined ? `Minimum ${minimum}` : undefined,
+            control: amountInput(model.currency, values.amount, errors.amount, true),
+          })
+        : renderAmountPicker(model, values.amount, errors.amount, minimum)}
       ${renderField({
         id: 'message',
         label: 'Message',
@@ -120,6 +131,44 @@ export function renderDonationPage(model: DonationPageModel): SafeHtml {
     `,
     { wide: true },
   );
+}
+
+/**
+ * Preset amounts as a radio group of chips, plus a Custom chip that reveals the
+ * free amount field (CSS only, see styles.css). After a validation error the
+ * chip matching the submitted amount is selected again, or Custom with the
+ * amount filled in.
+ */
+function renderAmountPicker(
+  model: DonationPageModel,
+  amount: string,
+  error: string | undefined,
+  minimum: string,
+): SafeHtml {
+  const amountMinor = parseAmountToMinorUnits(amount, model.fractionDigits);
+  const selectedPreset = model.presets.find(
+    (preset) => amountMinor !== undefined && parseAmountToMinorUnits(preset.value, model.fractionDigits) === amountMinor,
+  );
+  const customSelected = selectedPreset === undefined && amount.trim() !== '';
+  const chip = (value: string, label: string, checked: boolean) => html`<label class="chip">
+      <input class="chip__input" type="radio" name="preset" value="${value}"${checked && html` checked`}>
+      <span class="chip__face">${label}</span>
+    </label>`;
+
+  return html`<fieldset class="field amount-picker"${error !== undefined && html` aria-describedby="amount-error"`}>
+    <legend class="field__label">Amount</legend>
+    <div class="chips">
+      ${model.presets.map((preset) => chip(preset.value, preset.label, preset === selectedPreset))}
+      ${chip(customAmountChip, 'Custom', customSelected)}
+    </div>
+    <div class="amount-custom">
+      <label class="visually-hidden" for="amount">Custom amount</label>
+      ${amountInput(model.currency, customSelected ? amount : '', error, false)}
+    </div>
+    ${error === undefined
+      ? html`<p class="field__hint">Minimum ${minimum}</p>`
+      : html`<p class="field__error" id="amount-error">${error}</p>`}
+  </fieldset>`;
 }
 
 /** Amount field with the currency code as a prefix. */

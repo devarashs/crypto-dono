@@ -9,7 +9,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { Config } from '../config.ts';
 import { validateDonationForm } from '../donations/donation-form.ts';
 import type { DonationRepository } from '../donations/donation-repository.ts';
-import { formatMinorUnits } from '../money.ts';
+import { formatMinorUnits, formatMoneyForDisplay } from '../money.ts';
 import type { NowPaymentsClient } from '../nowpayments/nowpayments-client.ts';
 import type { SafeHtml } from '../web/html.ts';
 import { renderDonationPage, renderErrorPage, renderThanksPage } from '../web/pages.ts';
@@ -26,8 +26,13 @@ export type DonationRouteDependencies = {
 export function registerDonationRoutes(app: FastifyInstance, dependencies: DonationRouteDependencies): void {
   const { config, donations, nowPayments } = dependencies;
   const formRules = { ...config.donation, messageMaxLength: config.filters.messageMaxLength };
+  const presets = config.donation.presetsMinor.map((amountMinor) => ({
+    value: formatMinorUnits(amountMinor, config.donation.fractionDigits),
+    label: formatMoneyForDisplay(amountMinor, config.donation.currency),
+  }));
   const pageModel = {
     streamerName: config.streamerName,
+    presets,
     messageMaxLength: config.filters.messageMaxLength,
     messageMinAmountMinor: config.filters.messageMinAmountMinor,
     currency: config.donation.currency,

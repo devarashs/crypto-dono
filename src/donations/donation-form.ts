@@ -15,6 +15,8 @@ export type DonationFormRules = {
   readonly currency: string;
   /** From MESSAGE_MAX_LENGTH; counted in characters (code points). */
   readonly messageMaxLength: number;
+  /** One-tap amounts offered as chips; a submitted chip must be one of these. */
+  readonly presetsMinor?: readonly number[];
   readonly fractionDigits: number;
   readonly minAmountMinor: number;
   readonly maxAmountMinor: number;
@@ -44,7 +46,7 @@ export type DonationFormResult =
  * @param rules Currency and amount limits from configuration.
  */
 export function validateDonationForm(body: unknown, rules: DonationFormRules): DonationFormResult {
-  const values = readFormValues(body);
+  const values = readFormValues(body, rules);
   const errors: DonationFormErrors = {};
 
   const donorName = normaliseText(values.donorName);
@@ -82,13 +84,28 @@ export function validateDonationForm(body: unknown, rules: DonationFormRules): D
   };
 }
 
-function readFormValues(body: unknown): DonationFormValues {
+/** Value of the chip that reveals the free amount field. */
+export const customAmountChip = 'custom';
+
+function readFormValues(body: unknown, rules: DonationFormRules): DonationFormValues {
   const record = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
   return {
     donorName: readString(record.donorName),
-    amount: readString(record.amount),
+    amount: resolveAmount(readString(record.preset), readString(record.amount), rules),
     message: readString(record.message),
   };
+}
+
+/**
+ * A preset chip supplies the amount; "custom" or no chip means the typed field.
+ * A chip value that is not one of the configured presets is ignored rather than
+ * trusted, so a crafted request cannot pass off an arbitrary "preset".
+ */
+function resolveAmount(preset: string, typedAmount: string, rules: DonationFormRules): string {
+  if (preset === '' || preset === customAmountChip) return typedAmount;
+  const presetMinor = parseAmountToMinorUnits(preset, rules.fractionDigits);
+  if (presetMinor !== undefined && (rules.presetsMinor ?? []).includes(presetMinor)) return preset;
+  return typedAmount;
 }
 
 /** A repeated form field arrives as an array; anything but one string counts as empty. */
