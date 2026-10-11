@@ -113,6 +113,14 @@ export function createDonationRepository(database: Database, now: () => Date = (
     WHERE public_id = ? AND alert_triggered_at IS NOT NULL AND alert_shown_at IS NULL
     RETURNING *
   `);
+  // Keyset pagination on the primary key: stable while new donations arrive, and
+  // each page is an index range scan however deep the history goes.
+  const listPageStatement = database.prepare(`
+    SELECT * FROM donations
+    WHERE id < ? AND (? = 0 OR alert_triggered_at IS NOT NULL)
+    ORDER BY id DESC
+    LIMIT ?
+  `);
   const setInvoiceStatement = database.prepare(`
     UPDATE donations SET nowpayments_invoice_id = ?, updated_at = ?
     WHERE public_id = ?
@@ -212,6 +220,31 @@ export function createDonationRepository(database: Database, now: () => Date = (
     markAlertShown(publicId: string): boolean {
       const timestamp = now().toISOString();
       return markAlertShownStatement.get(timestamp, timestamp, publicId) !== undefined;
+    },
+
+    /**
+     * One page of donations, newest first.
+     *
+     * @param options.paidOnly Only donations that triggered an alert, hiding
+     *   abandoned checkouts.
+     * @param options.beforeId Continue after this row id; omit for the first page.
+     * @param options.limit Page size, clamped to 1..100.
+     * @returns The page, and the id to pass as `beforeId` for the next one, or
+     *   `null` when this is the last page.
+     */
+    listPage(options: { paidOnly: boolean; beforeId?: number; limit: number }): {
+      donations: Donation[];
+      nextBeforeId: number | null;
+    } {
+      const limit = Math.min(Math.max(Math.trunc(options.limit), 1), 100);
+      // One extra row tells whether another page exists without a COUNT query.
+      const rows = listPageStatement.all(
+        options.beforeId ?? Number.MAX_SAFE_INTEGER,
+        options.paidOnly ? 1 : 0,
+        limit + 1,
+      ) as DonationRow[];
+      const page = rows.slice(0, limit).map(toDonation);
+      return { donations: page, nextBeforeId: rows.length > limit ? (page.at(-1)?.id ?? null) : null };
     },
 
     /** @returns The updated donation, or `undefined` if no donation has that id. */
