@@ -5,6 +5,7 @@ const minimalEnvironment = {
   PUBLIC_BASE_URL: 'https://dono.example.com',
   NOWPAYMENTS_API_KEY: 'test-api-key',
   NOWPAYMENTS_IPN_SECRET: 'test-ipn-secret',
+  OVERLAY_TOKEN: 'overlay-token-for-tests-0123456789',
 };
 
 function configErrorFor(environment: Record<string, string | undefined>): ConfigError {
@@ -33,8 +34,21 @@ describe('loadConfig', () => {
         sandbox: false,
       },
       alertOnStatus: 'confirmed',
+      overlayToken: 'overlay-token-for-tests-0123456789',
       donation: { currency: 'usd', fractionDigits: 2, minAmountMinor: 100, maxAmountMinor: 100000 },
     });
+  });
+
+  it.each(['short', 'has spaces in it but is long enough', 'x'.repeat(23), 'a/b'.repeat(10)])(
+    'rejects OVERLAY_TOKEN=%j and explains how to generate one',
+    (token) => {
+      const issue = configErrorFor({ ...minimalEnvironment, OVERLAY_TOKEN: token }).issues[0];
+      expect(issue).toMatch(/^OVERLAY_TOKEN: .*randomBytes/);
+    },
+  );
+
+  it('accepts a 24-character base64url OVERLAY_TOKEN', () => {
+    expect(loadConfig({ ...minimalEnvironment, OVERLAY_TOKEN: 'aB3_-'.repeat(5).slice(0, 24) }).overlayToken).toHaveLength(24);
   });
 
   it.each(['confirming', 'confirmed', 'finished'])('accepts ALERT_ON_STATUS=%s', (status) => {
@@ -89,6 +103,7 @@ describe('loadConfig', () => {
       'PUBLIC_BASE_URL is required but not set',
       'NOWPAYMENTS_API_KEY is required but not set',
       'NOWPAYMENTS_IPN_SECRET is required but not set',
+      'OVERLAY_TOKEN is required but not set',
     ]);
   });
 
@@ -133,7 +148,7 @@ describe('loadConfig', () => {
 
   it('reports every problem at once', () => {
     const issues = configErrorFor({ PORT: 'abc', LOG_LEVEL: 'verbose' }).issues;
-    expect(issues).toHaveLength(5);
+    expect(issues).toHaveLength(6);
     expect(issues.join('\n')).toContain('PUBLIC_BASE_URL is required');
     expect(issues.join('\n')).toContain('NOWPAYMENTS_API_KEY is required');
   });

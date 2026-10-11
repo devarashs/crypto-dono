@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import { createAlertHub, type OverlayAlert } from '../src/alerts/alert-hub.ts';
 import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
 import { openDatabase } from '../src/database.ts';
@@ -29,25 +30,32 @@ function sign(payload: Record<string, unknown>, secret = ipnSecret): string {
 describe('POST /webhooks/nowpayments', () => {
   let app: FastifyInstance;
   let donations: DonationRepository;
-  let onDonationAlert: ReturnType<typeof vi.fn<(donation: Donation) => void>>;
+  let onDonationAlert: ReturnType<typeof vi.fn<(alert: OverlayAlert) => void>>;
   let donation: Donation;
 
-  function buildWith(alertOnStatus: string, alertHandler: (donation: Donation) => void = () => {}) {
+  function buildWith(alertOnStatus: string, alertHandler: (alert: OverlayAlert) => void = () => {}) {
     const config = loadConfig({
       PUBLIC_BASE_URL: 'https://dono.example.com',
       NOWPAYMENTS_API_KEY: 'k',
-      NOWPAYMENTS_IPN_SECRET: ipnSecret,
+      OVERLAY_TOKEN: 'overlay-token-for-tests-0123456789',
+    NOWPAYMENTS_IPN_SECRET: ipnSecret,
       ALERT_ON_STATUS: alertOnStatus,
       LOG_LEVEL: 'fatal',
     });
     donations = createDonationRepository(openDatabase(':memory:'));
     onDonationAlert = vi.fn(alertHandler);
+    // The hub swallows listener errors, so a throwing handler is wrapped to reach
+    // the webhook's own guard through a hub that rethrows.
+    const alertHub = createAlertHub((error) => {
+      throw error;
+    });
+    alertHub.subscribe(onDonationAlert);
     app = buildApp(config, {
       donations,
       nowPayments: {
         createInvoice: vi.fn(async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/payment/?iid=1' })),
       },
-      onDonationAlert,
+      alertHub,
     });
     donation = donations.create({ donorName: 'Ann', message: 'gg', amountMinor: 500, currency: 'usd' });
     donations.setInvoiceId(donation.publicId, '5309742318');
@@ -106,9 +114,13 @@ describe('POST /webhooks/nowpayments', () => {
     const response = await post(confirmed, sign(confirmed));
     expect(response.statusCode).toBe(200);
     expect(onDonationAlert).toHaveBeenCalledTimes(1);
-    expect(onDonationAlert.mock.calls[0]?.[0]).toMatchObject({
-      publicId: donation.publicId,
+    expect(onDonationAlert.mock.calls[0]?.[0]).toEqual({
+      id: donation.publicId,
       donorName: 'Ann',
+      message: 'gg',
+      amount: '$5.00',
+    });
+    expect(donations.findByPublicId(donation.publicId)).toMatchObject({
       status: 'confirmed',
       payCurrency: 'ltc',
       actuallyPaid: '0.0712',

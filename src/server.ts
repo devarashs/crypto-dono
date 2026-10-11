@@ -5,6 +5,7 @@
 import { buildApp } from './app.ts';
 import { ConfigError, loadConfig } from './config.ts';
 import { openDatabase } from './database.ts';
+import { createAlertHub } from './alerts/alert-hub.ts';
 import { createDonationRepository } from './donations/donation-repository.ts';
 import { createNowPaymentsClient } from './nowpayments/nowpayments-client.ts';
 
@@ -47,13 +48,7 @@ const app = buildApp(config, {
     apiKey: config.nowPayments.apiKey,
     baseUrl: config.nowPayments.baseUrl,
   }),
-  // Placeholder until the OBS overlay exists: the alert is logged, not shown.
-  onDonationAlert: (donation) => {
-    app.log.info(
-      { donationId: donation.publicId, donorName: donation.donorName, amountMinor: donation.amountMinor },
-      'Donation ready to alert',
-    );
-  },
+  alertHub: createAlertHub((error) => app.log.error({ err: error }, 'An overlay listener failed')),
 });
 app.addHook('onClose', async () => {
   database.close();
