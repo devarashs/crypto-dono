@@ -107,8 +107,8 @@ and Share Tech Mono, hard corners, neon grid and scanlines).
       self-hosted; reduced motion honoured; no third-party requests.
       Verified in Chromium at desktop and 375px (no horizontal scroll, both fonts
       loaded, no CSP errors) and on the overlay with a test alert.
-- [ ] 13. Donors pick an amount from preset chips (DONATION_PRESETS) or a Custom
-      chip that reveals an amount field. No JavaScript.
+- [x] 13. Donors pick an amount from preset chips (DONATION_PRESETS) or a Custom
+      chip that reveals an amount field. No JavaScript. Verified in Chromium.
 - [ ] 14. A public leaderboard shows "Top 100 donors" (totals per name,
       case-insensitive, Anonymous never ranked) and "Recent". Name, amount and
       date only; paid donations only; banned words masked. Donors opt out with a
