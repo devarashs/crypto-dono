@@ -177,7 +177,9 @@ public subscriptions and lags), so it comes last and with its limits stated.
 - [ ] 21. Twitch: the streamer connects Twitch from the admin page (OAuth), and
       EventSub webhooks deliver follows, subs, resubs, gift subs, cheers and raids.
       Signatures verified, duplicate deliveries ignored, revocations handled.
-      Tested with Twitch's own CLI event simulator.
+      Tested with signed fixtures built as Twitch's docs describe, then a real
+      event on the streamer's channel. (Twitch's CLI simulator would need a
+      downloaded binary; not used unless asked.)
 - [ ] 22. Kick: the same through Kick's public API webhooks (follows, subs, gift
       subs), with its signature scheme verified against Kick's docs.
 - [ ] 23. YouTube, if still wanted: delayed, public-only subscriber alerts by

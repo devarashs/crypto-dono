@@ -183,6 +183,25 @@ an overlay that is showing it right now.
 The admin page is disabled when `ADMIN_PASSWORD` is empty. Restarting the service
 signs you out.
 
+## Twitch alerts
+
+Follows, subs, resubs, gift subs, bits and raids from Twitch show in the same
+overlay as donations, through Twitch's EventSub webhooks.
+
+1. Register an application at [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps):
+   OAuth redirect URL `<PUBLIC_BASE_URL>/admin/twitch/callback`, client type
+   **Confidential**.
+2. Put its Client ID and a new secret in `TWITCH_CLIENT_ID` and
+   `TWITCH_CLIENT_SECRET`, and restart.
+3. Open `/admin` and click **Connect Twitch**. Twitch asks you to allow reading
+   followers, subscriptions and bits; nothing else is requested.
+
+The service needs a public HTTPS address on port 443, since Twitch delivers
+events there. Which kinds alert, their wording, duration and sounds are set
+with the `EVENT_*` settings in `.env.example`. If Twitch stops sending events
+(for example after you change your password), the admin page says so and offers
+**Reconnect Twitch**.
+
 ## Choosing when alerts fire
 
 `ALERT_ON_STATUS` sets how far a payment must get before its alert shows:
