@@ -152,3 +152,7 @@ and Share Tech Mono, hard corners, neon grid and scanlines).
       banned words masked, Anonymous shown; refreshes every 15 s.
       Verified in Chromium at 542 × 340 (29 px rows, both fonts) and live: a new
       $100 donation reached #1 within one refresh, with only that row animating.
+- [ ] 19. Starting Soon, Be Right Back and Ending Soon scenes as 1920 × 1080
+      Browser Sources in the same design: glitch title, optional countdown on
+      Starting Soon (?minutes=N), a donate panel with QR code, top donors and
+      latest donations updating live, and the socials with their handles.
