@@ -9,6 +9,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY src ./src
+COPY public ./public
 
 # The database lives here; mount a volume so donations survive container rebuilds.
 RUN mkdir -p /app/data && chown node:node /app/data
