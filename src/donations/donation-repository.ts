@@ -4,6 +4,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { runInTransaction, type Database } from '../database.ts';
+import { donorNameKey } from './donor-name-key.ts';
 import { isForwardTransition, reachesAlertThreshold, type AlertThresholdStatus } from './payment-status.ts';
 
 /** Every status NOWPayments reports, plus `created` for "invoice not yet made". */
@@ -37,6 +38,8 @@ export type Donation = {
   readonly alertTriggeredAt: string | null;
   /** When an overlay reported the alert as shown; `null` while it is pending. */
   readonly alertShownAt: string | null;
+  /** False when the donor opted out of the public leaderboard. */
+  readonly showOnLeaderboard: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
 };
@@ -63,6 +66,8 @@ export type NewDonation = {
   readonly message: string;
   readonly amountMinor: number;
   readonly currency: string;
+  /** Defaults to true, matching donations made before the leaderboard existed. */
+  readonly showOnLeaderboard?: boolean;
 };
 
 type DonationRow = {
@@ -79,6 +84,7 @@ type DonationRow = {
   actually_paid: string | null;
   alert_triggered_at: string | null;
   alert_shown_at: string | null;
+  show_on_leaderboard: number;
   created_at: string;
   updated_at: string;
 };
@@ -91,8 +97,9 @@ export type DonationRepository = ReturnType<typeof createDonationRepository>;
  */
 export function createDonationRepository(database: Database, now: () => Date = () => new Date()) {
   const insertStatement = database.prepare(`
-    INSERT INTO donations (public_id, donor_name, message, amount_minor, currency, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO donations (public_id, donor_name, donor_name_key, message, amount_minor, currency,
+                           show_on_leaderboard, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING *
   `);
   const findByPublicIdStatement = database.prepare('SELECT * FROM donations WHERE public_id = ?');
@@ -139,9 +146,11 @@ export function createDonationRepository(database: Database, now: () => Date = (
       const row = insertStatement.get(
         generatePublicId(),
         donation.donorName,
+        donorNameKey(donation.donorName),
         donation.message,
         donation.amountMinor,
         donation.currency,
+        donation.showOnLeaderboard === false ? 0 : 1,
         timestamp,
         timestamp,
       ) as DonationRow;
@@ -277,6 +286,7 @@ function toDonation(row: DonationRow): Donation {
     actuallyPaid: row.actually_paid,
     alertTriggeredAt: row.alert_triggered_at,
     alertShownAt: row.alert_shown_at,
+    showOnLeaderboard: row.show_on_leaderboard === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

@@ -80,6 +80,19 @@ describe('donation repository', () => {
   it('starts with no alert triggered', () => {
     expect(repository.create(newDonation).alertTriggeredAt).toBeNull();
   });
+
+  it('lists donations on the leaderboard unless the donor opted out', () => {
+    expect(repository.create(newDonation).showOnLeaderboard).toBe(true);
+    expect(repository.create({ ...newDonation, showOnLeaderboard: true }).showOnLeaderboard).toBe(true);
+    expect(repository.create({ ...newDonation, showOnLeaderboard: false }).showOnLeaderboard).toBe(false);
+  });
+
+  it('stores the case-insensitive name key', () => {
+    const { publicId } = repository.create({ ...newDonation, donorName: 'ＡnN' });
+    expect(database.prepare('SELECT donor_name_key FROM donations WHERE public_id = ?').get(publicId)).toEqual({
+      donor_name_key: 'ann',
+    });
+  });
 });
 
 describe('applyPaymentUpdate', () => {

@@ -1,3 +1,4 @@
+import { createInMemoryStore } from './support/in-memory-store.ts';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { request as httpRequest, type IncomingMessage } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -28,10 +29,12 @@ describe('overlay routes', () => {
       OVERLAY_TOKEN: token,
       LOG_LEVEL: 'fatal',
     });
-    donations = createDonationRepository(openDatabase(':memory:'));
+    const store = createInMemoryStore();
+    donations = store.donations;
     alertHub = createAlertHub();
     app = buildApp(config, {
       donations,
+      leaderboard: store.leaderboard,
       nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
       alertHub,
     });
@@ -245,8 +248,10 @@ describe('overlay routes', () => {
         CUSTOM_ASSETS_DIR: assetsDirectory,
         ...overrides,
       });
+      const customStore = createInMemoryStore();
       customApp = buildApp(config, {
-        donations: createDonationRepository(openDatabase(':memory:')),
+        donations: customStore.donations,
+        leaderboard: customStore.leaderboard,
         nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
         alertHub: createAlertHub(),
       });
@@ -328,10 +333,12 @@ describe('overlay routes', () => {
         TTS_TEMPLATE: '{name} sent {amount}. {message}',
         ...(ttsUrl !== undefined && { TTS_URL: ttsUrl }),
       });
-      speechDonations = createDonationRepository(openDatabase(':memory:'));
+      const speechStore = createInMemoryStore();
+      speechDonations = speechStore.donations;
       synthesize = vi.fn(async (text: string) => wav(text));
       speechApp = buildApp(config, {
         donations: speechDonations,
+        leaderboard: speechStore.leaderboard,
         nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
         alertHub: createAlertHub(),
         alertSpeech: createAlertSpeech({ synthesize }),

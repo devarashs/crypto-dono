@@ -1,3 +1,4 @@
+import { createInMemoryStore } from './support/in-memory-store.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { createAlertHub } from '../src/alerts/alert-hub.ts';
@@ -35,10 +36,10 @@ function buildTestApp(
     STREAMER_NAME: 'Arash',
     ...environment,
   });
-  const donations = createDonationRepository(openDatabase(':memory:'));
+  const { donations, leaderboard } = createInMemoryStore();
   const createInvoice = vi.fn<NowPaymentsClient['createInvoice']>(createInvoiceImplementation);
   return {
-    app: buildApp(config, { donations, nowPayments: { createInvoice }, alertHub: createAlertHub() }),
+    app: buildApp(config, { donations, leaderboard, nowPayments: { createInvoice }, alertHub: createAlertHub() }),
     donations,
     createInvoice,
   };
@@ -137,6 +138,73 @@ describe('app', () => {
     });
   });
 
+  describe('leaderboard', () => {
+    function paid(donorName: string, amountMinor: number, showOnLeaderboard = true) {
+      const { publicId } = context!.donations.create({ donorName, message: 'secret message', amountMinor, currency: 'usd', showOnLeaderboard });
+      context!.donations.applyPaymentUpdate(
+        publicId,
+        { status: 'finished', paymentId: `p-${publicId}`, invoiceId: null, payCurrency: 'ltc', actuallyPaid: '1' },
+        'confirmed',
+      );
+    }
+
+    it('shows top donors and recent donations, masked, without messages', async () => {
+      context = buildTestApp({ BANNED_WORDS: 'darn' });
+      paid('Ann', 500);
+      paid('Darn Dave', 2500);
+      paid('Hidden Hal', 9900, false);
+      const response = await context.app.inject({ method: 'GET', url: '/' });
+      expect(response.body).toContain('Top 100 donors');
+      expect(response.body).toContain('**** Dave');
+      expect(response.body).not.toContain('Darn Dave');
+      expect(response.body).toContain('Ann');
+      expect(response.body).not.toContain('Hidden Hal');
+      expect(response.body).not.toContain('secret message');
+      // Top donor first, in gold.
+      expect(response.body.indexOf('**** Dave')).toBeLessThan(response.body.indexOf('>Ann<'));
+      expect(response.body).toContain('board-table__row--top-1');
+    });
+
+    it('shows the empty state and a ticked opt-out box on a fresh page', async () => {
+      context = buildTestApp();
+      const response = await context.app.inject({ method: 'GET', url: '/' });
+      expect(response.body).toContain('No donors yet. Be the first.');
+      expect(response.body).toMatch(/name="listed" checked>/);
+    });
+
+    it('disappears entirely with LEADERBOARD=off', async () => {
+      context = buildTestApp({ LEADERBOARD: 'off' });
+      paid('Ann', 500);
+      const response = await context.app.inject({ method: 'GET', url: '/' });
+      expect(response.body).not.toContain('Leaderboard');
+      expect(response.body).not.toContain('name="listed"');
+    });
+
+    it('stores the donor choice from the checkbox', async () => {
+      context = buildTestApp();
+      await postDonation(context.app, { amount: '5', donorName: 'Listed', listed: 'on' });
+      await postDonation(context.app, { amount: '5', donorName: 'Private' });
+      const [listed, unlisted] = context.createInvoice.mock.calls.map((call) => context!.donations.findByPublicId(call[0].orderId));
+      expect(listed).toMatchObject({ donorName: 'Listed', showOnLeaderboard: true });
+      expect(unlisted).toMatchObject({ donorName: 'Private', showOnLeaderboard: false });
+    });
+
+    it('never lists a donor who was not offered the choice', async () => {
+      context = buildTestApp({ LEADERBOARD: 'off' });
+      await postDonation(context.app, { amount: '5', listed: 'on' });
+      const orderId = context.createInvoice.mock.calls[0]?.[0].orderId ?? '';
+      expect(context.donations.findByPublicId(orderId)?.showOnLeaderboard).toBe(false);
+    });
+
+    it('keeps an unticked box unticked when the form comes back with an error', async () => {
+      context = buildTestApp();
+      const response = await postDonation(context.app, { amount: 'nope' });
+      expect(response.statusCode).toBe(400);
+      expect(response.body).toContain('name="listed">');
+      expect(response.body).not.toMatch(/name="listed" checked>/);
+    });
+  });
+
   describe('amount chips', () => {
     it('renders the default preset chips and a Custom chip, none chosen', async () => {
       context = buildTestApp();
@@ -144,7 +212,8 @@ describe('app', () => {
       for (const label of ['$5.00', '$10.00', '$25.00', '$50.00', '$100.00', 'Custom']) {
         expect(response.body).toContain(`<span class="chip__face">${label}</span>`);
       }
-      expect(response.body).not.toContain(' checked>');
+      // No amount chip is pre-selected (other controls on the page may be checked).
+      expect(response.body).not.toMatch(/name="preset" value="[^"]*" checked/);
     });
 
     it('shows a plain amount field when presets are off', async () => {

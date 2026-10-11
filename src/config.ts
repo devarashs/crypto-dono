@@ -128,6 +128,9 @@ const environmentSchema = z.object({
   // Unset disables the admin page entirely. Not trimmed: spaces are part of a password.
   ADMIN_PASSWORD: z.preprocess(emptyAsUnset, z.string().min(12, 'must be at least 12 characters').optional()),
 
+  // The public donor leaderboard on the donation page.
+  LEADERBOARD: z.preprocess(emptyAsUnset, z.stringbool().default(true)),
+
   MESSAGE_MAX_LENGTH: z.preprocess(emptyAsUnset, z.coerce.number().int().min(10).max(500).default(300)),
   // Comma-separated words or phrases to mask in names and messages.
   BANNED_WORDS: z.preprocess(
@@ -198,6 +201,8 @@ export type Config = {
     /** File name in `assetsDirectory`, or `null` for no image. */
     readonly imageFileName: string | null;
   };
+  /** Whether the donation page shows the public leaderboard. */
+  readonly leaderboardEnabled: boolean;
   /** Admin page password, or `null` when the admin page is disabled. */
   readonly adminPassword: string | null;
   readonly filters: {
@@ -334,6 +339,7 @@ export function loadConfig(
       sound,
       imageFileName: variables.ALERT_IMAGE ?? null,
     },
+    leaderboardEnabled: variables.LEADERBOARD,
     adminPassword: variables.ADMIN_PASSWORD ?? null,
     filters: {
       messageMaxLength: variables.MESSAGE_MAX_LENGTH,

@@ -20,16 +20,16 @@ function validate(body: unknown, rules = usdRules) {
 
 describe('validateDonationForm', () => {
   it('accepts a complete donation', () => {
-    expect(validate({ donorName: 'Ann', amount: '5.50', message: 'gg' })).toEqual({
+    expect(validate({ donorName: 'Ann', amount: '5.50', message: 'gg', listed: 'on' })).toEqual({
       ok: true,
-      donation: { donorName: 'Ann', message: 'gg', amountMinor: 550 },
+      donation: { donorName: 'Ann', message: 'gg', amountMinor: 550, showOnLeaderboard: true },
     });
   });
 
   it('defaults an empty name to Anonymous and allows an empty message', () => {
     expect(validate({ donorName: '   ', amount: '5' })).toEqual({
       ok: true,
-      donation: { donorName: anonymousDonorName, message: '', amountMinor: 500 },
+      donation: { donorName: anonymousDonorName, message: '', amountMinor: 500, showOnLeaderboard: false },
     });
   });
 
@@ -79,13 +79,27 @@ describe('validateDonationForm', () => {
   });
 
   it('reports every field error at once and echoes the raw values back', () => {
-    const body = { donorName: 'x'.repeat(40), amount: 'nope', message: 'y'.repeat(400) };
+    const body = { donorName: 'x'.repeat(40), amount: 'nope', message: 'y'.repeat(400), listed: 'on' };
     const result = validate(body);
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(Object.keys(result.errors).sort()).toEqual(['amount', 'donorName', 'message']);
-      expect(result.values).toEqual(body);
+      expect(result.values).toEqual({ ...body, listed: true });
     }
+  });
+
+  describe('leaderboard checkbox', () => {
+    it('lists the donor when ticked', () => {
+      expect(validate({ amount: '5', listed: 'on' })).toMatchObject({ donation: { showOnLeaderboard: true } });
+    });
+
+    it('treats an absent checkbox, which is how browsers send an unticked one, as opted out', () => {
+      expect(validate({ amount: '5' })).toMatchObject({ donation: { showOnLeaderboard: false } });
+    });
+
+    it.each(['1', 'true', 'yes', ['on', 'on']])('does not treat %j as ticked', (listed) => {
+      expect(validate({ amount: '5', listed })).toMatchObject({ donation: { showOnLeaderboard: false } });
+    });
   });
 
   it.each([null, undefined, 'string body', 42, []])('treats a %j body as empty', (body) => {

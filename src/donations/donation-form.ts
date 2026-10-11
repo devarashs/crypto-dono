@@ -27,6 +27,8 @@ export type DonationFormValues = {
   readonly donorName: string;
   readonly amount: string;
   readonly message: string;
+  /** The "show me on the public leaderboard" checkbox. */
+  readonly listed: boolean;
 };
 
 export type DonationFormErrors = Partial<Record<keyof DonationFormValues, string>>;
@@ -35,6 +37,7 @@ export type ValidDonation = {
   readonly donorName: string;
   readonly message: string;
   readonly amountMinor: number;
+  readonly showOnLeaderboard: boolean;
 };
 
 export type DonationFormResult =
@@ -80,7 +83,12 @@ export function validateDonationForm(body: unknown, rules: DonationFormRules): D
   }
   return {
     ok: true,
-    donation: { donorName: donorName === '' ? anonymousDonorName : donorName, message, amountMinor },
+    donation: {
+      donorName: donorName === '' ? anonymousDonorName : donorName,
+      message,
+      amountMinor,
+      showOnLeaderboard: values.listed,
+    },
   };
 }
 
@@ -93,6 +101,8 @@ function readFormValues(body: unknown, rules: DonationFormRules): DonationFormVa
     donorName: readString(record.donorName),
     amount: resolveAmount(readString(record.preset), readString(record.amount), rules),
     message: readString(record.message),
+    // A browser omits an unticked checkbox entirely, so absent means "opted out".
+    listed: record.listed === 'on',
   };
 }
 

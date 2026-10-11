@@ -153,6 +153,8 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
     donorName: 'Test donor',
     amount: '5',
     message: 'This is a test alert. Nothing was charged.',
+    // Test alerts are never stored, so the leaderboard choice does not apply.
+    listed: false,
   };
 
   app.get<{ Params: TokenParams; Querystring: { sent?: string } }>('/overlay/:token/test', async (request, reply) => {

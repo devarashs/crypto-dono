@@ -1,3 +1,4 @@
+import { createInMemoryStore } from './support/in-memory-store.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { createAlertHub, type AlertHub, type OverlayAlert } from '../src/alerts/alert-hub.ts';
@@ -27,12 +28,13 @@ function build(environment: Record<string, string> = {}): Context {
     BANNED_WORDS: 'darn',
     ...environment,
   });
-  const donations = createDonationRepository(openDatabase(':memory:'));
+  const { donations, leaderboard } = createInMemoryStore();
   const alertHub = createAlertHub();
   const published: OverlayAlert[] = [];
   alertHub.subscribe((alert) => published.push(alert));
   const app = buildApp(config, {
     donations,
+    leaderboard,
     nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
     alertHub,
     ...(config.adminPassword !== null && { adminSessionSecret: 'a'.repeat(64) }),
@@ -216,6 +218,27 @@ describe('admin routes', () => {
       const second = await context.app.inject({ method: 'GET', url: olderLink ?? '', headers: { cookie } });
       expect(second.body).toContain('Donor 5<');
       expect(second.body).not.toContain('Older donations');
+    });
+
+    it('marks donations whose donor opted out of the leaderboard', async () => {
+      context = build();
+      const { publicId } = context.donations.create({
+        donorName: 'Private Pat',
+        message: '',
+        amountMinor: 500,
+        currency: 'usd',
+        showOnLeaderboard: false,
+      });
+      context.donations.applyPaymentUpdate(
+        publicId,
+        { status: 'finished', paymentId: 'p', invoiceId: null, payCurrency: 'ltc', actuallyPaid: '1' },
+        'confirmed',
+      );
+      paidDonation(context.donations, 'Public Pam');
+      const cookie = await signIn(context.app);
+      const body = (await context.app.inject({ method: 'GET', url: '/admin', headers: { cookie } })).body;
+      expect(body.match(/Hidden from leaderboard/g)).toHaveLength(1);
+      expect(body.indexOf('Hidden from leaderboard')).toBeGreaterThan(body.indexOf('Private Pat'));
     });
 
     it('shows the empty state', async () => {
