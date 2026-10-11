@@ -105,6 +105,16 @@ export const migrations: readonly Migration[] = [
       for (const row of rows) update.run(donorNameKey(row.donor_name), row.id);
     },
   },
+  {
+    version: 5,
+    description: 'Index the biggest single donations for the on-stream table',
+    sql: `
+      -- Matches the query's ORDER BY exactly, so the top 10 are read straight
+      -- off the index instead of sorting every listed donation.
+      CREATE INDEX donations_biggest ON donations (amount_minor DESC, alert_triggered_at)
+        WHERE show_on_leaderboard = 1 AND alert_triggered_at IS NOT NULL;
+    `,
+  },
 ];
 
 /** The schema version a freshly opened database ends up at. */

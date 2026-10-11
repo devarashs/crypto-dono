@@ -33,6 +33,8 @@ export type AdminDashboardModel = {
   readonly nextBeforeId: number | null;
   readonly showUnpaid: boolean;
   readonly overlayUrl: string;
+  /** OBS Browser Source for the on-stream table of biggest donations. */
+  readonly boardUrl: string;
   readonly testAlertUrl: string;
   readonly notice?: string;
 };
@@ -50,8 +52,10 @@ export function renderAdminDashboard(model: AdminDashboardModel): SafeHtml {
       </div>
       ${model.notice !== undefined && html`<p class="notice" role="status">${model.notice}</p>`}
       <dl class="admin-links">
-        <dt>OBS Browser Source</dt>
+        <dt>OBS alerts</dt>
         <dd><code>${model.overlayUrl}</code></dd>
+        <dt>OBS top-donations table</dt>
+        <dd><code>${model.boardUrl}</code></dd>
         <dt>Test alert</dt>
         <dd><a class="link" href="${model.testAlertUrl}">Open the test-alert page</a></dd>
       </dl>

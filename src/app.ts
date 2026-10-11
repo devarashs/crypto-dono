@@ -160,6 +160,7 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
       config,
       donations: dependencies.donations,
       alertHub: dependencies.alertHub,
+      leaderboard: dependencies.leaderboard,
       presentAlert,
       publishAlert,
       prepareSpeech,

@@ -417,6 +417,92 @@ describe('overlay routes', () => {
     });
   });
 
+  describe('on-stream table of biggest donations', () => {
+    let boardApp: FastifyInstance;
+    let boardDonations: DonationRepository;
+
+    function paid(donorName: string, amountMinor: number, showOnLeaderboard = true) {
+      const { publicId } = boardDonations.create({ donorName, message: 'never shown', amountMinor, currency: 'usd', showOnLeaderboard });
+      boardDonations.applyPaymentUpdate(
+        publicId,
+        { status: 'finished', paymentId: `p-${publicId}`, invoiceId: null, payCurrency: 'ltc', actuallyPaid: '1' },
+        'confirmed',
+      );
+    }
+
+    beforeEach(() => {
+      const config = loadConfig({
+        PUBLIC_BASE_URL: 'https://dono.example.com',
+        NOWPAYMENTS_API_KEY: 'k',
+        NOWPAYMENTS_IPN_SECRET: 's',
+        OVERLAY_TOKEN: token,
+        LOG_LEVEL: 'fatal',
+        BANNED_WORDS: 'darn',
+      });
+      const store = createInMemoryStore();
+      boardDonations = store.donations;
+      boardApp = buildApp(config, {
+        donations: store.donations,
+        leaderboard: store.leaderboard,
+        nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
+        alertHub: createAlertHub(),
+      });
+    });
+    afterEach(async () => {
+      await boardApp.close();
+    });
+
+    it('serves the table page with its own script allowed', async () => {
+      const response = await boardApp.inject({ method: 'GET', url: `/overlay/${token}/board` });
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toContain('src="/static/board.js" type="module"');
+      // Resolve the feed address the way the browser will, then fetch it.
+      const dataUrl = /data-data-url="([^"]+)"/.exec(response.body)?.[1] ?? '';
+      const feedPath = new URL(dataUrl, `https://dono.example.com/overlay/${token}/board`).pathname;
+      expect(feedPath).toBe(`/overlay/${token}/board.json`);
+      expect((await boardApp.inject({ method: 'GET', url: feedPath })).statusCode).toBe(200);
+      expect(response.body).toContain('data-refresh-ms="15000"');
+      expect(response.headers['content-security-policy']).toContain("script-src 'self'");
+    });
+
+    it('feeds the 10 biggest single donations, masked, without opted-out donors or messages', async () => {
+      paid('Darn Dave', 5000);
+      paid('Hidden Hal', 9900, false);
+      for (let index = 1; index <= 11; index += 1) paid(`Donor ${index}`, index * 100);
+      const response = await boardApp.inject({ method: 'GET', url: `/overlay/${token}/board.json` });
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['cache-control']).toBe('no-store');
+      const { donations: rows } = response.json() as { donations: { donorName: string; amount: string }[] };
+      expect(rows).toHaveLength(10);
+      expect(rows[0]).toEqual({ donorName: '**** Dave', amount: '$50.00' });
+      expect(rows[1]).toEqual({ donorName: 'Donor 11', amount: '$11.00' });
+      expect(response.body).not.toContain('Hidden Hal');
+      expect(response.body).not.toContain('never shown');
+    });
+
+    it('feeds an empty list before any donation', async () => {
+      const response = await boardApp.inject({ method: 'GET', url: `/overlay/${token}/board.json` });
+      expect(response.json()).toEqual({ donations: [] });
+    });
+
+    it('answers 404 to a wrong token for both the page and the feed', async () => {
+      for (const url of ['/overlay/wrong-token-wrong-token-wrong/board', '/overlay/wrong-token-wrong-token-wrong/board.json']) {
+        expect((await boardApp.inject({ method: 'GET', url })).statusCode, url).toBe(404);
+      }
+    });
+
+    it('serves the table script and stylesheet', async () => {
+      for (const [file, type] of [
+        ['board.js', /javascript/],
+        ['board.css', /text\/css/],
+      ] as const) {
+        const response = await boardApp.inject({ method: 'GET', url: `/static/${file}` });
+        expect(response.statusCode, file).toBe(200);
+        expect(response.headers['content-type']).toMatch(type);
+      }
+    });
+  });
+
   describe('test alerts', () => {
     function postTest(fields: Record<string, string>, tokenInPath = token) {
       return app.inject({

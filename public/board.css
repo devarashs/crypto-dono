@@ -1,0 +1,135 @@
+/*
+ * On-stream table of the biggest donations: a transparent page whose panel
+ * fills the Browser Source exactly (designed for 542 × 340, scales with it).
+ * Same design system as everything else; only transform and opacity animate.
+ */
+@import url('tokens.css');
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-mono);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+.board-panel {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  height: 100vh;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  box-shadow:
+    inset 0 0 0 1px var(--color-accent-soft),
+    0 0 40px var(--color-glow-faint);
+  background:
+    linear-gradient(var(--color-accent), var(--color-accent)) top left / 18px 2px,
+    linear-gradient(var(--color-accent), var(--color-accent)) top left / 2px 18px,
+    linear-gradient(var(--color-accent), var(--color-accent)) bottom right / 18px 2px,
+    linear-gradient(var(--color-accent), var(--color-accent)) bottom right / 2px 18px,
+    linear-gradient(135deg, var(--color-surface-raised), var(--overlay-surface));
+  background-repeat: no-repeat;
+}
+
+.board-panel__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--color-text);
+  text-shadow: 0 0 14px var(--color-glow-soft);
+}
+
+/* Ten equal rows fill the space left under the title, whatever the size. */
+.board-list {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: repeat(10, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.board-row {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 0;
+  border-top: 1px solid var(--color-border);
+  font-size: 1rem;
+  line-height: 1.1;
+}
+
+.board-row:first-child {
+  border-top: 0;
+}
+
+.board-row__rank {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.board-row__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-row__amount {
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 10px var(--color-accent-faint);
+}
+
+.board-row--rank-1 .board-row__rank,
+.board-row--rank-1 .board-row__name {
+  color: var(--color-rank-1);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--color-rank-1) 40%, transparent);
+}
+
+.board-row--rank-2 .board-row__rank,
+.board-row--rank-2 .board-row__name {
+  color: var(--color-rank-2);
+}
+
+.board-row--rank-3 .board-row__rank,
+.board-row--rank-3 .board-row__name {
+  color: var(--color-rank-3);
+}
+
+.board-panel__empty {
+  margin: auto 0;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+/* A donation that just entered the top 10 settles into place. */
+@keyframes board-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+}
+
+.board-row.is-new {
+  animation: board-enter var(--motion-entrance) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-row.is-new {
+    animation: none;
+  }
+}
