@@ -5,6 +5,7 @@
 import { customAmountChip, type DonationFormErrors, type DonationFormValues } from '../donations/donation-form.ts';
 import { formatMoneyForDisplay, parseAmountToMinorUnits } from '../money.ts';
 import { html, type SafeHtml } from './html.ts';
+import type { SocialLinkModel } from './social-links.ts';
 
 /**
  * The page shell: a fixed neon backdrop (grid floor, horizon bloom, scanlines,
@@ -25,15 +26,23 @@ export function layout(title: string, content: SafeHtml, options: { wide?: boole
     <link rel="stylesheet" href="/static/styles.css">
   </head>
   <body>
-    <div class="backdrop" aria-hidden="true">
+    ${backdrop()}
+    <main class="page${options.wide === true ? ' page--wide' : ''}">${content}</main>
+  </body>
+</html>`;
+}
+
+/**
+ * The neon scene behind a page: sky, horizon bloom, rolling grid and scanlines.
+ * Decorative, CSS only (effects.css); shared with the stream scenes.
+ */
+export function backdrop(): SafeHtml {
+  return html`<div class="backdrop" aria-hidden="true">
       <div class="backdrop__bloom"></div>
       <div class="backdrop__floor"><div class="backdrop__grid"></div></div>
       <div class="backdrop__horizon-fade"></div>
     </div>
-    <div class="scanlines" aria-hidden="true"></div>
-    <main class="page${options.wide === true ? ' page--wide' : ''}">${content}</main>
-  </body>
-</html>`;
+    <div class="scanlines" aria-hidden="true"></div>`;
 }
 
 /** A content surface with neon corner brackets. */
@@ -77,13 +86,7 @@ export type DonationPageModel = {
   readonly socialLinks: readonly SocialLinkModel[];
 };
 
-export type SocialLinkModel = {
-  /** Platform name, used as the link's accessible label, e.g. "Twitch". */
-  readonly label: string;
-  readonly url: string;
-  /** 24×24 SVG path. */
-  readonly iconPath: string;
-};
+export type { SocialLinkModel } from './social-links.ts';
 
 export type LeaderboardModel = {
   readonly currency: string;

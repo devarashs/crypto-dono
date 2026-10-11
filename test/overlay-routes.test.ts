@@ -503,6 +503,113 @@ describe('overlay routes', () => {
     });
   });
 
+  describe('stream scenes', () => {
+    let sceneApp: FastifyInstance;
+    let sceneDonations: DonationRepository;
+
+    function paid(donorName: string, amountMinor: number, showOnLeaderboard = true) {
+      const { publicId } = sceneDonations.create({ donorName, message: 'never shown', amountMinor, currency: 'usd', showOnLeaderboard });
+      sceneDonations.applyPaymentUpdate(
+        publicId,
+        { status: 'finished', paymentId: `p-${publicId}`, invoiceId: null, payCurrency: 'ltc', actuallyPaid: '1' },
+        'confirmed',
+      );
+    }
+
+    beforeEach(() => {
+      const config = loadConfig({
+        PUBLIC_BASE_URL: 'https://dono.example.com',
+        NOWPAYMENTS_API_KEY: 'k',
+        NOWPAYMENTS_IPN_SECRET: 's',
+        OVERLAY_TOKEN: token,
+        LOG_LEVEL: 'fatal',
+        STREAMER_NAME: 'machinearash',
+        BANNED_WORDS: 'darn',
+        SOCIAL_LINKS: 'twitch=https://www.twitch.tv/machinearash,discord=https://discord.gg/abc123',
+      });
+      const store = createInMemoryStore();
+      sceneDonations = store.donations;
+      sceneApp = buildApp(config, {
+        donations: store.donations,
+        leaderboard: store.leaderboard,
+        nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
+        alertHub: createAlertHub(),
+      });
+    });
+    afterEach(async () => {
+      await sceneApp.close();
+    });
+
+    it.each([
+      ['starting-soon', 'Starting soon', 'on'],
+      ['brb', 'Be right back', 'off'],
+      ['ending-soon', 'Ending soon', 'off'],
+    ])('renders the %s scene', async (kind, title, countdown) => {
+      const response = await sceneApp.inject({ method: 'GET', url: `/overlay/${token}/scene/${kind}` });
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toContain(`<span class="glitch-title__text">${title}</span>`);
+      expect(response.body).toContain(`data-countdown="${countdown}"`);
+      expect(response.body).toContain('>machinearash</p>');
+      expect(response.body).toContain('>dono.example.com</p>');
+      expect(response.body).toContain('>twitch.tv/machinearash</span>');
+      expect(response.body).toContain('>discord.gg/abc123</span>');
+      expect(response.body).not.toContain(token);
+      expect(response.headers['content-security-policy']).toContain("script-src 'self'");
+    });
+
+    it('answers 404 for an unknown scene and for a wrong token', async () => {
+      expect((await sceneApp.inject({ method: 'GET', url: `/overlay/${token}/scene/lunch` })).statusCode).toBe(404);
+      for (const path of ['brb', 'feed.json', 'qr.svg']) {
+        const response = await sceneApp.inject({ method: 'GET', url: `/overlay/wrong-token-wrong-token-wrong/scene/${path}` });
+        expect(response.statusCode, path).toBe(404);
+      }
+    });
+
+    it('resolves the feed and QR addresses relative to the scene page', async () => {
+      const page = (await sceneApp.inject({ method: 'GET', url: `/overlay/${token}/scene/brb` })).body;
+      const pageUrl = `https://dono.example.com/overlay/${token}/scene/brb`;
+      for (const relative of [/data-feed-url="([^"]+)"/.exec(page)?.[1], /src="(qr\.svg)"/.exec(page)?.[1]]) {
+        const path = new URL(relative ?? 'missing', pageUrl).pathname;
+        expect((await sceneApp.inject({ method: 'GET', url: path })).statusCode, path).toBe(200);
+      }
+    });
+
+    it('feeds the top 5 donors by total and the 5 latest donations, masked, without opt-outs', async () => {
+      paid('Ann', 500);
+      paid('Ann', 700);
+      paid('Darn Dave', 900);
+      paid('Hidden Hal', 9900, false);
+      for (let index = 1; index <= 5; index += 1) paid(`D${index}`, 100 * index);
+      const response = await sceneApp.inject({ method: 'GET', url: `/overlay/${token}/scene/feed.json` });
+      expect(response.headers['cache-control']).toBe('no-store');
+      const feed = response.json() as { topDonors: { donorName: string; amount: string }[]; latest: { donorName: string; amount: string }[] };
+      expect(feed.topDonors).toEqual([
+        { donorName: 'Ann', amount: '$12.00' },
+        { donorName: '**** Dave', amount: '$9.00' },
+        { donorName: 'D5', amount: '$5.00' },
+        { donorName: 'D4', amount: '$4.00' },
+        { donorName: 'D3', amount: '$3.00' },
+      ]);
+      expect(feed.latest.map((entry) => entry.donorName)).toEqual(['D5', 'D4', 'D3', 'D2', 'D1']);
+      expect(response.body).not.toContain('Hidden Hal');
+      expect(response.body).not.toContain('never shown');
+    });
+
+    it('serves a QR code of the donation page as SVG', async () => {
+      const response = await sceneApp.inject({ method: 'GET', url: `/overlay/${token}/scene/qr.svg` });
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['content-type']).toMatch(/^image\/svg\+xml/);
+      expect(response.body).toMatch(/^<svg[^>]+viewBox="0 0 \d+ \d+"/);
+      expect(response.body).not.toContain('style=');
+    });
+
+    it('serves the scene assets', async () => {
+      for (const file of ['scene.js', 'scene.css', 'effects.css', 'live-list.js']) {
+        expect((await sceneApp.inject({ method: 'GET', url: `/static/${file}` })).statusCode, file).toBe(200);
+      }
+    });
+  });
+
   describe('test alerts', () => {
     function postTest(fields: Record<string, string>, tokenInPath = token) {
       return app.inject({

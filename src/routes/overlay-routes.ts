@@ -9,6 +9,9 @@
  *   GET  /overlay/:token/alerts/:id/speech    the alert read aloud, as WAV, if TTS is on
  *   GET  /overlay/:token/board                on-stream table of the biggest donations
  *   GET  /overlay/:token/board.json           its data, polled by the table
+ *   GET  /overlay/:token/scene/:kind          full-screen scene: starting-soon, brb, ending-soon
+ *   GET  /overlay/:token/scene/feed.json      top donors and latest donations for the scenes
+ *   GET  /overlay/:token/scene/qr.svg         QR code of the donation page
  *   GET  /overlay/:token/test                 form for sending a test alert
  *   POST /overlay/:token/test                 send a test alert to connected overlays
  *
@@ -32,7 +35,13 @@ import type { LeaderboardQueries } from '../donations/leaderboard.ts';
 import { formatMoneyForDisplay } from '../money.ts';
 import { html } from '../web/html.ts';
 import { renderTestAlertPage } from '../web/pages.ts';
+import { renderScenePage, sceneKinds, type SceneKind } from '../web/scene-pages.ts';
+import { toSocialLinkModels } from '../web/social-links.ts';
+import QRCode from 'qrcode';
 import { sendHtml } from './donation-routes.ts';
+
+/** Rows in each list on the stream scenes. */
+const sceneListSize = 5;
 
 /** Rows in the on-stream table of biggest donations. */
 const boardSize = 10;
@@ -91,6 +100,52 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
     if (typeof request.params.token !== 'string' || !hasValidToken(request.params.token)) {
       return reply.callNotFound();
     }
+  });
+
+  // ── Stream scenes ──────────────────────────────────────────────────────────
+  const donateUrl = new URL(config.publicBaseUrl);
+  const donateDisplay = `${donateUrl.host}${donateUrl.pathname}`.replace(/\/+$/, '');
+  const sceneSocialLinks = toSocialLinkModels(config.socialLinks);
+  const isSceneKind = (kind: string): kind is SceneKind => (sceneKinds as readonly string[]).includes(kind);
+
+  // Generated once: the donation address does not change while the server runs.
+  // Dark modules on a light tile, because many phone cameras cannot read an
+  // inverted (light-on-dark) code.
+  let qrSvg: Promise<string> | undefined;
+  const getQrSvg = () =>
+    (qrSvg ??= QRCode.toString(config.publicBaseUrl, {
+      type: 'svg',
+      margin: 2,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#0b0817', light: '#e8e5f7' },
+    }));
+
+  app.get<{ Params: TokenParams }>('/overlay/:token/scene/qr.svg', async (_request, reply) => {
+    return reply.type('image/svg+xml').header('cache-control', 'max-age=3600').send(await getQrSvg());
+  });
+
+  app.get<{ Params: TokenParams }>('/overlay/:token/scene/feed.json', async (_request, reply) => {
+    const currency = config.donation.currency;
+    const money = (amountMinor: number) => formatMoneyForDisplay(amountMinor, currency);
+    return reply.header('cache-control', 'no-store').send({
+      topDonors: leaderboard
+        .topDonors(currency, sceneListSize)
+        .map((donor) => ({ donorName: bannedWords.mask(donor.donorName), amount: money(donor.totalMinor) })),
+      latest: leaderboard
+        .recent(currency, sceneListSize)
+        .map((donation) => ({ donorName: bannedWords.mask(donation.donorName), amount: money(donation.amountMinor) })),
+    });
+  });
+
+  app.get<{ Params: TokenParams & { kind: string } }>('/overlay/:token/scene/:kind', async (request, reply) => {
+    const { kind } = request.params;
+    if (!isSceneKind(kind)) return reply.callNotFound();
+    reply.header('content-security-policy', overlayContentSecurityPolicy);
+    return sendHtml(
+      reply,
+      200,
+      renderScenePage({ kind, streamerName: config.streamerName, donateDisplay, socialLinks: sceneSocialLinks }),
+    );
   });
 
   app.get<{ Params: TokenParams }>('/overlay/:token/board', async (request, reply) => {

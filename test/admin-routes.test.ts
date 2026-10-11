@@ -125,6 +125,8 @@ describe('admin routes', () => {
     expect(dashboard.body).toContain('darn good stream');
     expect(dashboard.body).toContain(`https://dono.example.com/overlay/${token}`);
     expect(dashboard.body).toContain(`https://dono.example.com/overlay/${token}/board`);
+    expect(dashboard.body).toContain(`https://dono.example.com/overlay/${token}/scene/starting-soon?minutes=5`);
+    expect(dashboard.body).toContain(`https://dono.example.com/overlay/${token}/scene/ending-soon`);
     expect(dashboard.body).toContain(`/overlay/${token}/test`);
   });
 
