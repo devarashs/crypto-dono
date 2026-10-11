@@ -115,6 +115,31 @@ export const migrations: readonly Migration[] = [
         WHERE show_on_leaderboard = 1 AND alert_triggered_at IS NOT NULL;
     `,
   },
+  {
+    version: 6,
+    description: 'Platform connections and Twitch message de-duplication',
+    sql: `
+      -- One row per connected platform account (the streamer's own channel).
+      CREATE TABLE platform_connections (
+        platform TEXT PRIMARY KEY CHECK (platform IN ('twitch', 'kick', 'youtube')),
+        account_id TEXT NOT NULL,
+        account_login TEXT NOT NULL,
+        -- 'active', or 'revoked' when the platform withdrew access.
+        status TEXT NOT NULL CHECK (status IN ('active', 'revoked')),
+        status_reason TEXT,
+        connected_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      ) STRICT;
+
+      -- Twitch delivers "at least once"; a message id seen before is ignored.
+      -- Pruned after a day: Twitch retries within minutes, not days.
+      CREATE TABLE twitch_messages (
+        message_id TEXT PRIMARY KEY,
+        received_at TEXT NOT NULL
+      ) STRICT;
+      CREATE INDEX twitch_messages_received_at ON twitch_messages (received_at);
+    `,
+  },
 ];
 
 /** The schema version a freshly opened database ends up at. */
