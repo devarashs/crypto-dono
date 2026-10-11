@@ -10,6 +10,7 @@ import { extname, resolve } from 'node:path';
 import { z } from 'zod';
 import { alertThresholdStatuses, type AlertThresholdStatus } from './donations/payment-status.ts';
 import { currencyFractionDigits, parseAmountToMinorUnits } from './money.ts';
+import { socialIcons } from './web/social-icons.ts';
 import { nowPaymentsBaseUrls } from './nowpayments/nowpayments-client.ts';
 
 /** Thrown when the environment does not describe a valid configuration. */
@@ -128,6 +129,8 @@ const environmentSchema = z.object({
   // Unset disables the admin page entirely. Not trimmed: spaces are part of a password.
   ADMIN_PASSWORD: z.preprocess(emptyAsUnset, z.string().min(12, 'must be at least 12 characters').optional()),
 
+  // Comma-separated platform=url pairs for the socials strip, in display order.
+  SOCIAL_LINKS: z.preprocess(emptyAsUnset, z.string().default('')),
   // The public donor leaderboard on the donation page.
   LEADERBOARD: z.preprocess(emptyAsUnset, z.stringbool().default(true)),
 
@@ -201,6 +204,8 @@ export type Config = {
     /** File name in `assetsDirectory`, or `null` for no image. */
     readonly imageFileName: string | null;
   };
+  /** Links in the socials strip, in display order; empty for no strip. */
+  readonly socialLinks: readonly SocialLink[];
   /** Whether the donation page shows the public leaderboard. */
   readonly leaderboardEnabled: boolean;
   /** Admin page password, or `null` when the admin page is disabled. */
@@ -280,6 +285,7 @@ export function loadConfig(
       secondPassIssues.push('DONATION_PRESETS: every amount must lie between DONATION_MIN_AMOUNT and DONATION_MAX_AMOUNT');
     }
   }
+  const socialLinks = parseSocialLinks(variables.SOCIAL_LINKS, secondPassIssues);
   const messageMinAmountMinor = parseAmountToMinorUnits(variables.MESSAGE_MIN_AMOUNT, fractionDigits);
   const speechMinAmountMinor = parseAmountToMinorUnits(variables.TTS_MIN_AMOUNT, fractionDigits);
   if (messageMinAmountMinor === undefined) secondPassIssues.push(`MESSAGE_MIN_AMOUNT: must be ${amountFormat}`);
@@ -339,6 +345,7 @@ export function loadConfig(
       sound,
       imageFileName: variables.ALERT_IMAGE ?? null,
     },
+    socialLinks,
     leaderboardEnabled: variables.LEADERBOARD,
     adminPassword: variables.ADMIN_PASSWORD ?? null,
     filters: {
@@ -356,6 +363,62 @@ export function loadConfig(
       presetsMinor,
     },
   };
+}
+
+export type SocialLink = {
+  /** A key of socialIcons (e.g. "twitch"), or "link" for any other site. */
+  readonly platform: string;
+  /** Absolute https URL. */
+  readonly url: string;
+};
+
+/** Enough for every platform a streamer uses; more turns a quiet strip into clutter. */
+const maximumSocialLinks = 10;
+
+/**
+ * Parses SOCIAL_LINKS ("twitch=https://twitch.tv/me,kick=https://kick.com/me").
+ * Only https URLs are accepted: these become links on a public page, and a
+ * javascript: or plain-http URL must never get there by a typo.
+ */
+function parseSocialLinks(list: string, issues: string[]): SocialLink[] {
+  const entries = list
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== '');
+  if (entries.length > maximumSocialLinks) {
+    issues.push(`SOCIAL_LINKS: at most ${maximumSocialLinks} links`);
+    return [];
+  }
+  const links: SocialLink[] = [];
+  for (const entry of entries) {
+    const separator = entry.indexOf('=');
+    const platform = entry.slice(0, Math.max(separator, 0)).trim().toLowerCase();
+    const url = entry.slice(separator + 1).trim();
+    if (separator <= 0 || url === '') {
+      issues.push(`SOCIAL_LINKS: "${entry}" should look like platform=https://...`);
+      continue;
+    }
+    if (platform !== 'link' && !(platform in socialIcons)) {
+      issues.push(
+        `SOCIAL_LINKS: unknown platform "${platform}". Use one of ${Object.keys(socialIcons).join(', ')}, or "link" for any other site`,
+      );
+      continue;
+    }
+    if (!isHttpsUrl(url)) {
+      issues.push(`SOCIAL_LINKS: the ${platform} link must be a full https:// address`);
+      continue;
+    }
+    links.push({ platform, url });
+  }
+  return links;
+}
+
+function isHttpsUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 /** Chips offered when DONATION_PRESETS is unset, in the donation currency. */
