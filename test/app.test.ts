@@ -137,6 +137,45 @@ describe('app', () => {
     });
   });
 
+  describe('amount chips', () => {
+    it('renders the default preset chips and a Custom chip, none chosen', async () => {
+      context = buildTestApp();
+      const response = await context.app.inject({ method: 'GET', url: '/' });
+      for (const label of ['$5.00', '$10.00', '$25.00', '$50.00', '$100.00', 'Custom']) {
+        expect(response.body).toContain(`<span class="chip__face">${label}</span>`);
+      }
+      expect(response.body).not.toContain(' checked>');
+    });
+
+    it('shows a plain amount field when presets are off', async () => {
+      context = buildTestApp({ DONATION_PRESETS: 'none' });
+      const response = await context.app.inject({ method: 'GET', url: '/' });
+      expect(response.body).not.toContain('chip__face');
+      expect(response.body).toContain('id="amount"');
+    });
+
+    it('creates the invoice for the chosen chip', async () => {
+      context = buildTestApp();
+      const response = await postDonation(context.app, { preset: '25.00', amount: '' });
+      expect(response.statusCode).toBe(303);
+      expect(context.createInvoice.mock.calls[0]?.[0]).toMatchObject({ priceAmount: '25.00' });
+    });
+
+    it('keeps the chosen chip selected when the form comes back with an error', async () => {
+      context = buildTestApp({ MESSAGE_MAX_LENGTH: '10' });
+      const response = await postDonation(context.app, { preset: '50.00', message: 'far too long a message' });
+      expect(response.statusCode).toBe(400);
+      expect(response.body).toMatch(/value="50.00" checked>/);
+    });
+
+    it('keeps a custom amount in its field when the form comes back with an error', async () => {
+      context = buildTestApp({ MESSAGE_MAX_LENGTH: '10' });
+      const response = await postDonation(context.app, { preset: 'custom', amount: '7.77', message: 'far too long a message' });
+      expect(response.body).toMatch(/value="custom" checked>/);
+      expect(response.body).toContain('value="7.77"');
+    });
+  });
+
   describe('POST /donate', () => {
     it('stores the donation, creates an invoice and redirects to checkout', async () => {
       context = buildTestApp();

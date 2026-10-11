@@ -46,7 +46,56 @@ describe('loadConfig', () => {
       adminPassword: null,
       filters: { messageMaxLength: 300, bannedWords: [], messageMinAmountMinor: 0, speechMinAmountMinor: 0 },
       tts: null,
-      donation: { currency: 'usd', fractionDigits: 2, minAmountMinor: 100, maxAmountMinor: 100000 },
+      donation: {
+        currency: 'usd',
+        fractionDigits: 2,
+        minAmountMinor: 100,
+        maxAmountMinor: 100000,
+        presetsMinor: [500, 1000, 2500, 5000, 10000],
+      },
+    });
+  });
+
+  describe('DONATION_PRESETS', () => {
+    it('parses, de-duplicates and sorts the amounts', () => {
+      expect(
+        loadConfig({ ...minimalEnvironment, DONATION_PRESETS: ' 20, 2.50 ,20,,100 ' }).donation.presetsMinor,
+      ).toEqual([250, 2000, 10000]);
+    });
+
+    it.each(['none', 'NONE'])('%s means no chips', (value) => {
+      expect(loadConfig({ ...minimalEnvironment, DONATION_PRESETS: value }).donation.presetsMinor).toEqual([]);
+    });
+
+    it.each([
+      ['a malformed amount', '5,ten', /"ten" is not/],
+      ['zero', '0,5', /"0" is not/],
+      ['too many decimals', '5.555', /"5.555" is not/],
+      ['more than 8 amounts', '1,2,3,4,5,6,7,8,9', /at most 8/],
+      ['an amount below the minimum', '0.5,5', /between DONATION_MIN_AMOUNT and DONATION_MAX_AMOUNT/],
+      ['an amount above the maximum', '5,5000', /between DONATION_MIN_AMOUNT and DONATION_MAX_AMOUNT/],
+    ])('rejects %s', (_label, value, pattern) => {
+      const issues = configErrorFor({ ...minimalEnvironment, DONATION_PRESETS: value }).issues;
+      expect(issues).toHaveLength(1);
+      expect(issues[0]).toMatch(pattern);
+    });
+
+    it('trims unset defaults to the amount range instead of failing', () => {
+      expect(
+        loadConfig({ ...minimalEnvironment, DONATION_MIN_AMOUNT: '20', DONATION_MAX_AMOUNT: '60' }).donation.presetsMinor,
+      ).toEqual([2500, 5000]);
+    });
+
+    it('uses the currency decimals', () => {
+      expect(
+        loadConfig({
+          ...minimalEnvironment,
+          DONATION_CURRENCY: 'jpy',
+          DONATION_MIN_AMOUNT: '100',
+          DONATION_MAX_AMOUNT: '100000',
+          DONATION_PRESETS: '500,1000',
+        }).donation.presetsMinor,
+      ).toEqual([500, 1000]);
     });
   });
 
@@ -214,12 +263,20 @@ describe('loadConfig', () => {
           DONATION_MIN_AMOUNT: '300',
           DONATION_MAX_AMOUNT: '100000',
         }).donation,
-      ).toEqual({ currency: 'jpy', fractionDigits: 0, minAmountMinor: 300, maxAmountMinor: 100000 });
+      ).toEqual({
+        currency: 'jpy',
+        fractionDigits: 0,
+        minAmountMinor: 300,
+        maxAmountMinor: 100000,
+        // The defaults, 5 to 100 yen, all fall below this minimum.
+        presetsMinor: [],
+      });
     });
 
     it('accepts equal minimum and maximum', () => {
       expect(
-        loadConfig({ ...minimalEnvironment, DONATION_MIN_AMOUNT: '5', DONATION_MAX_AMOUNT: '5' }).donation,
+        loadConfig({ ...minimalEnvironment, DONATION_MIN_AMOUNT: '5', DONATION_MAX_AMOUNT: '5', DONATION_PRESETS: '5' })
+          .donation,
       ).toMatchObject({ minAmountMinor: 500, maxAmountMinor: 500 });
     });
 

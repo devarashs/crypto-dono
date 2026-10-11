@@ -99,6 +99,37 @@ describe('validateDonationForm', () => {
   });
 });
 
+describe('amount chips', () => {
+  const rules = { ...usdRules, presetsMinor: [500, 1000, 2500] };
+
+  it('takes the amount from a chosen preset chip', () => {
+    expect(validate({ preset: '10.00', amount: '' }, rules)).toMatchObject({ ok: true, donation: { amountMinor: 1000 } });
+  });
+
+  it('accepts a preset written without decimals', () => {
+    expect(validate({ preset: '25' }, rules)).toMatchObject({ ok: true, donation: { amountMinor: 2500 } });
+  });
+
+  it('uses the typed amount with the custom chip, ignoring nothing else', () => {
+    expect(validate({ preset: 'custom', amount: '7.25' }, rules)).toMatchObject({ ok: true, donation: { amountMinor: 725 } });
+  });
+
+  it('uses the typed amount when no chip is sent', () => {
+    expect(validate({ amount: '7' }, rules)).toMatchObject({ ok: true, donation: { amountMinor: 700 } });
+  });
+
+  it('ignores a chip value that is not a configured preset', () => {
+    const result = validate({ preset: '999', amount: '' }, rules);
+    expect(result.ok === false && result.errors.amount).toBe('Enter an amount.');
+    expect(validate({ preset: '0.01', amount: '6' }, rules)).toMatchObject({ ok: true, donation: { amountMinor: 600 } });
+  });
+
+  it('echoes the resolved amount, so the page can re-select the chip', () => {
+    const result = validate({ preset: '10.00', message: 'x'.repeat(400) }, rules);
+    expect(result.ok === false && result.values.amount).toBe('10.00');
+  });
+});
+
 describe('normaliseText', () => {
   it.each([
     ['  hello   world  ', 'hello world'],

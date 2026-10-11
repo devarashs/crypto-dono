@@ -668,3 +668,103 @@ a.tabs__tab:hover {
     transition: none !important;
   }
 }
+
+/* ── Amount chips ──────────────────────────────────────────────────────────
+ * Radio buttons styled as chips: native keyboard and screen-reader behaviour,
+ * no JavaScript. The input stays focusable but invisible; the face shows state.
+ */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.amount-picker {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.amount-picker > .field__label {
+  margin-bottom: var(--space-2);
+  padding: 0;
+}
+
+.chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.25rem, 1fr));
+  gap: var(--space-2);
+}
+
+.chip {
+  position: relative;
+  display: block;
+  cursor: pointer;
+}
+
+.chip__input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.chip__face {
+  display: grid;
+  place-items: center;
+  min-height: 2.75rem;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-void);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  transition:
+    transform var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out);
+}
+
+.chip:hover .chip__face {
+  border-color: var(--color-accent-soft);
+  transform: translateY(-2px);
+}
+
+.chip__input:checked + .chip__face {
+  border-color: var(--color-accent);
+  background: var(--color-accent-faint);
+  color: var(--color-accent);
+  box-shadow:
+    inset 0 0 18px var(--color-accent-faint),
+    0 0 14px var(--color-accent-faint);
+}
+
+.chip__input:focus-visible + .chip__face {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.amount-custom {
+  margin-top: var(--space-2);
+}
+
+/* Reveal the free amount field only while Custom is chosen. Browsers without
+   :has() skip this block and simply always show the field. */
+@supports selector(:has(*)) {
+  .amount-picker:not(:has(.chip__input[value='custom']:checked)) .amount-custom {
+    display: none;
+  }
+}
+
+.amount-picker > .field__hint,
+.amount-picker > .field__error {
+  margin-top: var(--space-2);
+}
