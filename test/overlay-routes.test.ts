@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { createAlertHub, type AlertHub } from '../src/alerts/alert-hub.ts';
+import { createAlertHub, type AlertHub, type OverlayAlert } from '../src/alerts/alert-hub.ts';
 import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
 import { openDatabase } from '../src/database.ts';
@@ -607,6 +607,116 @@ describe('overlay routes', () => {
       for (const file of ['scene.js', 'scene.css', 'effects.css', 'live-list.js']) {
         expect((await sceneApp.inject({ method: 'GET', url: `/static/${file}` })).statusCode, file).toBe(200);
       }
+    });
+  });
+
+  describe('test platform events', () => {
+    let eventApp: FastifyInstance;
+    let eventHub: AlertHub;
+    let received: OverlayAlert[];
+    let assetsDirectory: string;
+
+    function buildEventApp(overrides: Record<string, string> = {}) {
+      const config = loadConfig({
+        PUBLIC_BASE_URL: 'https://dono.example.com',
+        NOWPAYMENTS_API_KEY: 'k',
+        NOWPAYMENTS_IPN_SECRET: 's',
+        OVERLAY_TOKEN: token,
+        LOG_LEVEL: 'fatal',
+        CUSTOM_ASSETS_DIR: assetsDirectory,
+        ...overrides,
+      });
+      const store = createInMemoryStore();
+      eventHub = createAlertHub();
+      received = [];
+      eventHub.subscribe((alert) => received.push(alert));
+      eventApp = buildApp(config, {
+        donations: store.donations,
+        leaderboard: store.leaderboard,
+        nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
+        alertHub: eventHub,
+      });
+      return eventApp;
+    }
+
+    function sendTestEvent(fields: Record<string, string>) {
+      return eventApp.inject({
+        method: 'POST',
+        url: `/overlay/${token}/test/event`,
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        payload: new URLSearchParams(fields).toString(),
+      });
+    }
+
+    beforeEach(() => {
+      assetsDirectory = mkdtempSync(join(tmpdir(), 'crypto-dono-event-sounds-'));
+      writeFileSync(join(assetsDirectory, 'raid.mp3'), 'fake raid sound');
+    });
+    afterEach(async () => {
+      await eventApp?.close();
+      rmSync(assetsDirectory, { recursive: true, force: true });
+    });
+
+    it.each([
+      ['follow', 'TestFollower just followed'],
+      ['sub', 'TestSubscriber subscribed'],
+      ['resub', 'TestSubscriber resubscribed for 12 months'],
+      ['gift', 'TestGifter gifted 5 subs'],
+      ['cheer', 'TestCheerer cheered 500 bits'],
+      ['raid', 'TestRaider is raiding with 42 viewers'],
+    ])('publishes a %s test event to overlays', async (kind, text) => {
+      buildEventApp();
+      eventHub.subscribe(() => {});
+      const response = await sendTestEvent({ kind, platform: 'twitch' });
+      expect(response.statusCode).toBe(303);
+      expect(response.headers.location).toBe('../test?sent=2');
+      expect(received).toHaveLength(1);
+      expect(received[0]).toMatchObject({ kind, badge: { label: 'Twitch' } });
+      expect(received[0]?.headline?.map((part) => part.text).join('')).toBe(text);
+    });
+
+    it('uses the Kick badge when Kick is chosen', async () => {
+      buildEventApp();
+      await sendTestEvent({ kind: 'follow', platform: 'kick' });
+      expect(received[0]?.badge?.label).toBe('Kick');
+    });
+
+    it('reports a switched-off kind instead of publishing it', async () => {
+      buildEventApp({ EVENT_ALERTS: 'sub,raid' });
+      const response = await sendTestEvent({ kind: 'follow', platform: 'twitch' });
+      expect(response.headers.location).toBe('../test?event=off');
+      expect(received).toEqual([]);
+      const page = await eventApp.inject({ method: 'GET', url: `/overlay/${token}/test?event=off` });
+      expect(page.body).toContain('switched off in EVENT_ALERTS');
+    });
+
+    it('ignores an unknown kind', async () => {
+      buildEventApp();
+      const response = await sendTestEvent({ kind: 'donation', platform: 'twitch' });
+      expect(response.headers.location).toBe('../test?event=unknown');
+      expect(received).toEqual([]);
+    });
+
+    it('shows a button for every kind on the test page', async () => {
+      buildEventApp();
+      const page = (await eventApp.inject({ method: 'GET', url: `/overlay/${token}/test` })).body;
+      for (const kind of ['follow', 'sub', 'resub', 'gift', 'cheer', 'raid']) {
+        expect(page).toContain(`name="kind" value="${kind}"`);
+      }
+      expect(page).toContain('action="test/event"');
+    });
+
+    it('serves a per-kind custom sound, and nothing for kinds without one', async () => {
+      buildEventApp({ EVENT_SOUND_RAID: 'raid.mp3' });
+      const raid = await eventApp.inject({ method: 'GET', url: `/overlay/${token}/assets/sound/raid` });
+      expect(raid.statusCode).toBe(200);
+      expect(raid.body).toBe('fake raid sound');
+      for (const kind of ['follow', 'resub', 'unknown']) {
+        const response = await eventApp.inject({ method: 'GET', url: `/overlay/${token}/assets/sound/${kind}` });
+        expect(response.statusCode, kind).toBe(404);
+      }
+      await sendTestEvent({ kind: 'raid', platform: 'twitch' });
+      expect(received[0]?.sound).toEqual({ type: 'file', path: 'assets/sound/raid' });
     });
   });
 

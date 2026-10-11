@@ -117,3 +117,41 @@ body {
     transition: opacity var(--overlay-enter-duration) linear;
   }
 }
+
+/* ── Platform event cards (follow, sub, gift, cheer, raid) ───────────────── */
+
+.alert-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.alert-badge__icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  fill: var(--color-accent);
+  filter: drop-shadow(0 0 0.5rem var(--color-accent-soft));
+}
+
+/* Follows are the most frequent and least momentous: a smaller card. */
+.alert-card--follow {
+  padding: var(--space-4) var(--space-6);
+}
+
+.alert-card--follow .alert-headline {
+  font-size: calc(var(--overlay-font-size-headline) * 0.65);
+}
+
+/* Raids are rare and big: the headline glows in the accent colour. */
+.alert-card--raid .alert-headline {
+  text-shadow:
+    0 0 30px var(--color-accent-soft),
+    0 0 2px var(--color-accent);
+}

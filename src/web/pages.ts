@@ -364,6 +364,16 @@ export function renderErrorPage(title: string, message: string): SafeHtml {
   );
 }
 
+/** One button per event kind on the test page. */
+const testEventButtons = [
+  ['follow', 'Follow'],
+  ['sub', 'Sub'],
+  ['resub', 'Resub'],
+  ['gift', 'Gift subs'],
+  ['cheer', 'Bits'],
+  ['raid', 'Raid'],
+] as const;
+
 export type TestAlertPageModel = {
   readonly currency: string;
   readonly values: DonationFormValues;
@@ -405,6 +415,20 @@ export function renderTestAlertPage(model: TestAlertPageModel): SafeHtml {
           control: html`<textarea class="input input--multiline" id="message" name="message"${errorAttributes('message', errors.message)}>${model.values.message}</textarea>`,
         })}
         <button class="button" type="submit">Send test alert</button>
+      </form>
+      <h2 class="panel__title test-events__title">Platform events</h2>
+      <p class="muted">Preview each follow, sub, bits and raid card. Nothing is sent to Twitch or Kick.</p>
+      <form class="test-events" method="post" action="test/event">
+        <fieldset class="test-events__platform">
+          <legend class="field__label">Platform</legend>
+          <label class="test-events__option"><input type="radio" name="platform" value="twitch" checked> Twitch</label>
+          <label class="test-events__option"><input type="radio" name="platform" value="kick"> Kick</label>
+        </fieldset>
+        <div class="test-events__buttons">
+          ${testEventButtons.map(
+            ([kind, label]) => html`<button class="button button--ghost button--small" type="submit" name="kind" value="${kind}">${label}</button>`,
+          )}
+        </div>
       </form>
     `),
   );
