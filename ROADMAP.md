@@ -58,6 +58,9 @@ Each can be revisited; none is load-bearing enough to block work.
       Status: built and demonstrated in Chromium and Docker (live alert from a signed
       IPN, unicode, HTML shown as text, ack after display, two missed alerts replayed
       in order, clean console). Not yet confirmed inside OBS itself.
+- [ ] 6a. The streamer can send a test alert to OBS without a payment. Pulled
+      forward from item 10 at the streamer's request (2026-10-11), to set up the
+      overlay in OBS before the admin page exists. Protected by the overlay token.
 - [ ] 7. The streamer can restyle alerts (sound, image, duration, template) without
       touching code.
 - [ ] 8. Donation messages are read aloud (design per item 5).
@@ -73,7 +76,7 @@ Each can be revisited; none is load-bearing enough to block work.
 ## Phase 3 — Admin
 
 - [ ] 10. The streamer can manage alerts from a password-protected admin page:
-      donation history, send a test alert, replay or skip.
+      donation history, replay or skip. (Test alerts moved to item 6a.)
 
 ## Phase 4 — Open-source release
 
