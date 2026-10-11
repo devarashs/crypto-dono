@@ -76,8 +76,9 @@ Each can be revisited; none is load-bearing enough to block work.
       Status: built; verified in Chromium against a real Piper 1.8 container (speech
       ready before the card, 6.2 s clip played to its end, card held until then; with
       Piper stopped the alert still showed silently). Not yet heard inside OBS.
-- [ ] 9. Messages are filtered: maximum length, banned words, minimum amounts to show
-      a message and to read it aloud.
+- [x] 9. Messages are filtered: maximum length, banned words, minimum amounts to show
+      a message and to read it aloud. Applied at display time on every path (live,
+      replay, test, speech after restart); verified end to end and in Chromium.
 
 ## Phase 3 — Admin
 
