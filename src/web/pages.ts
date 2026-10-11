@@ -5,6 +5,7 @@
 import { customAmountChip, type DonationFormErrors, type DonationFormValues } from '../donations/donation-form.ts';
 import { formatMoneyForDisplay, parseAmountToMinorUnits } from '../money.ts';
 import { html, type SafeHtml } from './html.ts';
+import type { SocialLinkModel } from './social-links.ts';
 
 /**
  * The page shell: a fixed neon backdrop (grid floor, horizon bloom, scanlines,
@@ -85,13 +86,7 @@ export type DonationPageModel = {
   readonly socialLinks: readonly SocialLinkModel[];
 };
 
-export type SocialLinkModel = {
-  /** Platform name, used as the link's accessible label, e.g. "Twitch". */
-  readonly label: string;
-  readonly url: string;
-  /** 24×24 SVG path. */
-  readonly iconPath: string;
-};
+export type { SocialLinkModel } from './social-links.ts';
 
 export type LeaderboardModel = {
   readonly currency: string;
