@@ -25,15 +25,23 @@ export function layout(title: string, content: SafeHtml, options: { wide?: boole
     <link rel="stylesheet" href="/static/styles.css">
   </head>
   <body>
-    <div class="backdrop" aria-hidden="true">
+    ${backdrop()}
+    <main class="page${options.wide === true ? ' page--wide' : ''}">${content}</main>
+  </body>
+</html>`;
+}
+
+/**
+ * The neon scene behind a page: sky, horizon bloom, rolling grid and scanlines.
+ * Decorative, CSS only (effects.css); shared with the stream scenes.
+ */
+export function backdrop(): SafeHtml {
+  return html`<div class="backdrop" aria-hidden="true">
       <div class="backdrop__bloom"></div>
       <div class="backdrop__floor"><div class="backdrop__grid"></div></div>
       <div class="backdrop__horizon-fade"></div>
     </div>
-    <div class="scanlines" aria-hidden="true"></div>
-    <main class="page${options.wide === true ? ' page--wide' : ''}">${content}</main>
-  </body>
-</html>`;
+    <div class="scanlines" aria-hidden="true"></div>`;
 }
 
 /** A content surface with neon corner brackets. */

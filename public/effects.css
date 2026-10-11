@@ -1,0 +1,188 @@
+/*
+ * Shared retro effects: the neon backdrop, the glitch title and the entrance
+ * animation. Used by the site pages (styles.css) and the stream scenes
+ * (scene.css), so both always look the same. Values come from tokens.css.
+ */
+
+/* ── Backdrop: sky, horizon bloom, rolling neon grid, scanlines ─────────────
+ * Decorative and CSS-only. The only moving part is the grid's transform.
+ */
+
+.backdrop {
+  /* Where the floor meets the sky, from the top of the viewport. */
+  --horizon: 62%;
+  /* One grid square; the roll travels exactly this far, so the loop is seamless. */
+  --grid-cell: 56px;
+
+  position: fixed;
+  inset: 0;
+  /* lvh, so the scene does not jump when a phone's URL bar collapses. */
+  height: 100lvh;
+  z-index: -1;
+  overflow: hidden;
+  background: linear-gradient(
+    to bottom,
+    var(--color-void) 0%,
+    var(--color-surface) var(--horizon),
+    var(--color-void) 100%
+  );
+}
+
+.backdrop__bloom {
+  position: absolute;
+  left: 50%;
+  top: var(--horizon);
+  width: min(120vw, 70rem);
+  aspect-ratio: 2.4;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(closest-side, var(--color-glow-faint), transparent);
+}
+
+.backdrop__floor {
+  position: absolute;
+  top: var(--horizon);
+  bottom: 0;
+  /* Wider than the viewport: perspective narrows the far edge. */
+  left: -60%;
+  right: -60%;
+  perspective: 22rem;
+  perspective-origin: 50% 0;
+  overflow: hidden;
+}
+
+.backdrop__grid {
+  position: absolute;
+  top: calc(var(--grid-cell) * -1);
+  left: 0;
+  right: 0;
+  height: 300%;
+  transform-origin: 50% 0;
+  transform: rotateX(74deg);
+  background-image:
+    linear-gradient(to bottom, var(--color-glow-soft) 0 2px, transparent 2px),
+    linear-gradient(to right, var(--color-glow-soft) 0 2px, transparent 2px);
+  background-size: var(--grid-cell) var(--grid-cell);
+  background-position: center top;
+  animation: grid-roll 2.8s linear infinite;
+}
+
+/* translateY after rotateX slides along the tilted plane. */
+@keyframes grid-roll {
+  to {
+    transform: rotateX(74deg) translateY(var(--grid-cell));
+  }
+}
+
+/* Fades the far grid lines into the sky; an overlay, not a mask, so the
+   animated grid is not re-rasterised every frame. */
+.backdrop__horizon-fade {
+  position: absolute;
+  top: var(--horizon);
+  left: 0;
+  right: 0;
+  height: 22%;
+  background: linear-gradient(to bottom, var(--color-surface), transparent);
+}
+
+/* On the glass, above content, faint enough not to cost text contrast. */
+.scanlines {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgb(0 0 0 / 0.16) 0 1px, transparent 1px 3px);
+}
+
+/* ── Glitch title: two tinted copies, clipped to bands, jolt sideways ───── */
+
+.glitch-title {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  font-family: var(--font-display);
+  font-size: var(--text-hero);
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+  text-shadow:
+    0 0 22px var(--color-glow-soft),
+    0 0 2px var(--color-glow);
+}
+
+.glitch-title__slice {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  text-shadow: none;
+  pointer-events: none;
+  /* Longhands: a nameless animation shorthand would be minified to none. */
+  animation-duration: 520ms;
+  animation-timing-function: steps(1, end);
+  animation-delay: 700ms;
+  animation-iteration-count: 1;
+}
+
+.glitch-title__slice--upper {
+  color: var(--color-accent);
+  clip-path: inset(12% 0 56% 0);
+  animation-name: glitch-jolt-left;
+}
+
+.glitch-title__slice--lower {
+  color: var(--color-glow);
+  clip-path: inset(58% 0 10% 0);
+  animation-name: glitch-jolt-right;
+}
+
+/* An animation restarts only when its name changes, so hover swaps them. */
+.glitch-title:hover .glitch-title__slice {
+  animation-delay: 0ms;
+}
+
+.glitch-title:hover .glitch-title__slice--upper {
+  animation-name: glitch-jolt-right;
+}
+
+.glitch-title:hover .glitch-title__slice--lower {
+  animation-name: glitch-jolt-left;
+}
+
+@keyframes glitch-jolt-left {
+  0% { opacity: 0.9; transform: translateX(-8px); }
+  18% { transform: translateX(5px); }
+  36% { opacity: 0; }
+  54% { opacity: 0.9; transform: translateX(-4px); }
+  72% { transform: translateX(7px); }
+  90% { opacity: 0; transform: none; }
+}
+
+@keyframes glitch-jolt-right {
+  0% { opacity: 0; }
+  12% { opacity: 0.9; transform: translateX(7px); }
+  30% { transform: translateX(-6px); }
+  48% { opacity: 0; }
+  66% { opacity: 0.9; transform: translateX(4px); }
+  84% { opacity: 0; transform: none; }
+}
+
+/* ── Entrance: fade up and settle, staggered by position ───────────────── */
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+/* No `to` frame and `backwards` fill: hidden during the delay, then the
+   element lets go of transform so hover transforms still work. */
+.rise-in {
+  animation: rise-in var(--motion-entrance) var(--ease-out) backwards;
+  animation-delay: calc(var(--motion-stagger) * var(--rise-order, 0));
+}
+
+.rise-in:nth-child(2) { --rise-order: 2; }
+.rise-in:nth-child(3) { --rise-order: 4; }
+.rise-in:nth-child(4) { --rise-order: 6; }
