@@ -123,10 +123,12 @@ and Share Tech Mono, hard corners, neon grid and scanlines).
 
 ## Phase 6 — Production
 
-- [ ] 16. The service runs on an always-on AWS Lightsail instance (Ubuntu 24.04,
+- [x] 16. The service runs on an always-on AWS Lightsail instance (Ubuntu 24.04,
       $7 plan, 1 GB RAM, paid from AWS promotional credit) at a Cloudflare-managed
       subdomain, behind Caddy for automatic HTTPS, with Piper, a swap file, a
       nightly database backup, and an AWS budget alert.
+      Verified 2026-10-11: live at https://dono.devarash.icu, and the streamer made
+      a real donation that alerted on stream end to end.
       Considered and deferred (2026-10-11): Cloudflare Tunnel in front, with ports
       80/443 closed, to remove the bandwidth-overage risk from floods. Revisit if
       traffic or the bill ever looks wrong.
@@ -158,3 +160,29 @@ and Share Tech Mono, hard corners, neon grid and scanlines).
       latest donations updating live, and the socials with their handles.
       Verified in Chromium at 1920 × 1080 for all three scenes (countdown only on
       Starting Soon, no overflow, all seven socials, live lists from the feed).
+
+## Phase 8 — Platform alerts
+
+Agreed 2026-10-11: unified follow, sub, bits and raid alerts in the same overlay,
+replacing StreamElements for these. Twitch and Kick push events in real time;
+YouTube cannot (no push for new subscribers; the subscriber list only shows
+public subscriptions and lags), so it comes last and with its limits stated.
+
+- [ ] 20. The overlay shows platform events alongside donations, in one queue:
+      follow, subscription (new and resub with months), gift subs (one alert per
+      gift), cheer, raid. Per-kind wording and sound from .env, a platform icon on
+      each card, and test buttons for every kind on the test-alert page.
+- [ ] 21. Twitch: the streamer connects Twitch from the admin page (OAuth), and
+      EventSub webhooks deliver follows, subs, resubs, gift subs, cheers and raids.
+      Signatures verified, duplicate deliveries ignored, revocations handled.
+      Tested with Twitch's own CLI event simulator.
+- [ ] 22. Kick: the same through Kick's public API webhooks (follows, subs, gift
+      subs), with its signature scheme verified against Kick's docs.
+- [ ] 23. YouTube, if still wanted: delayed, public-only subscriber alerts by
+      polling, and memberships and Super Chats while live.
+
+## Deferred ideas
+
+- Donor-chosen text-to-speech voices (one multi-speaker Piper model, e.g.
+  en_US-libritts_r-medium, CC BY 4.0, with named picks). Raised and set aside
+  2026-10-11 in favour of platform alerts.
