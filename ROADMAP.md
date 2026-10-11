@@ -73,6 +73,9 @@ Each can be revisited; none is load-bearing enough to block work.
       GPL-3 (piper1-gpl) and voices carry per-model licences, so it is not bundled
       into this MIT image. Check the chosen voice's model card licence. No TTS_URL
       means messages are shown but not spoken.
+      Status: built; verified in Chromium against a real Piper 1.8 container (speech
+      ready before the card, 6.2 s clip played to its end, card held until then; with
+      Piper stopped the alert still showed silently). Not yet heard inside OBS.
 - [ ] 9. Messages are filtered: maximum length, banned words, minimum amounts to show
       a message and to read it aloud.
 
