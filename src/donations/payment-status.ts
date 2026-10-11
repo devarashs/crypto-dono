@@ -2,8 +2,10 @@
  * Ordering of payment statuses, and the rule for when a donation earns its alert.
  *
  * NOWPayments sends one IPN per status change and retries failed deliveries, so
- * callbacks can arrive late, twice, or out of order. Statuses are therefore
- * compared by progress rather than applied in arrival order.
+ * callbacks can arrive late, twice, or out of order. It also skips statuses: a
+ * real USDT (BSC) payment on 2026-10-11 went waiting → sending → finished with
+ * no confirming or confirmed IPN at all. Statuses are therefore compared by
+ * progress, never matched exactly, and never applied in arrival order.
  */
 import type { DonationStatus } from './donation-repository.ts';
 
