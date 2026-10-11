@@ -10,6 +10,7 @@
 import type { Donation } from '../donations/donation-repository.ts';
 import { formatMoneyForDisplay } from '../money.ts';
 import { buildSpeechText } from '../tts/alert-speech.ts';
+import { createBannedWordFilter } from './banned-words.ts';
 import type { OverlayAlert } from './alert-hub.ts';
 
 /** The donation fields an alert is built from. Test alerts supply these directly. */
@@ -51,7 +52,7 @@ export function donationToAlertSource(donation: Donation): AlertSource {
 }
 
 export function createAlertPresenter(rules: AlertFilterRules): AlertPresenter {
-  const bannedPattern = compileBannedPattern(rules.bannedWords);
+  const bannedWords = createBannedWordFilter(rules.bannedWords);
 
   return (source) => {
     const showMessage = source.amountMinor >= rules.messageMinAmountMinor;
@@ -59,8 +60,8 @@ export function createAlertPresenter(rules: AlertFilterRules): AlertPresenter {
     const amount = formatMoneyForDisplay(source.amountMinor, source.currency);
     const alert: OverlayAlert = {
       id: source.id,
-      donorName: maskBannedWords(source.donorName, bannedPattern),
-      message: maskBannedWords(message, bannedPattern),
+      donorName: bannedWords.mask(source.donorName),
+      message: bannedWords.mask(message),
       amount,
       speak: rules.speechTemplate !== null && source.amountMinor >= rules.speechMinAmountMinor,
     };
@@ -69,40 +70,11 @@ export function createAlertPresenter(rules: AlertFilterRules): AlertPresenter {
         ? buildSpeechText(rules.speechTemplate, {
             // Banned words are dropped rather than masked: a voice reading out
             // "asterisk asterisk" is worse than a short gap.
-            donorName: removeBannedWords(source.donorName, bannedPattern),
-            message: removeBannedWords(message, bannedPattern),
+            donorName: bannedWords.remove(source.donorName),
+            message: bannedWords.remove(message),
             amount,
           })
         : null;
     return { alert, speechText };
   };
-}
-
-/**
- * One case-insensitive pattern for every banned word. A match must not be part
- * of a longer word ("ass" does not hit "class"), judged by Unicode letters and
- * digits so it works beyond English.
- *
- * This catches plain use. It does not try to catch deliberate evasion (spacing,
- * look-alike characters, leetspeak); no word list can, and trying produces false
- * positives on innocent messages.
- */
-function compileBannedPattern(bannedWords: readonly string[]): RegExp | null {
-  const words = bannedWords.map((word) => word.normalize('NFC').trim()).filter((word) => word !== '');
-  if (words.length === 0) return null;
-  // Longest first, so a phrase wins over a word it contains.
-  const alternatives = [...new Set(words)]
-    .sort((a, b) => b.length - a.length)
-    .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  return new RegExp(`(?<![\\p{L}\\p{N}])(?:${alternatives.join('|')})(?![\\p{L}\\p{N}])`, 'giu');
-}
-
-function maskBannedWords(text: string, pattern: RegExp | null): string {
-  if (pattern === null) return text;
-  return text.replace(pattern, (match) => '*'.repeat([...match].length));
-}
-
-function removeBannedWords(text: string, pattern: RegExp | null): string {
-  if (pattern === null) return text;
-  return text.replace(pattern, '').replace(/\s+/g, ' ').trim();
 }
