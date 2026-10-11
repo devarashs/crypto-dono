@@ -174,19 +174,19 @@ public subscriptions and lags), so it comes last and with its limits stated.
       each card, and test buttons for every kind on the test-alert page.
       Verified in Chromium: raid, follow (compact card) and resub with message,
       queued behind a pending donation, with Twitch and Kick badges.
-- [ ] 21. Twitch: the streamer connects Twitch from the admin page (OAuth), and
-      EventSub webhooks deliver follows, subs, resubs, gift subs, cheers and raids.
-      Signatures verified, duplicate deliveries ignored, revocations handled.
-      Tested with signed fixtures built as Twitch's docs describe, then a real
-      event on the streamer's channel. (Twitch's CLI simulator would need a
-      downloaded binary; not used unless asked.)
-- [ ] 22. Kick: the same through Kick's public API webhooks (follows, subs, gift
-      subs), with its signature scheme verified against Kick's docs.
-- [ ] 23. YouTube, if still wanted: delayed, public-only subscriber alerts by
-      polling, and memberships and Super Chats while live.
+- [ ] 21. Twitch: shelved 2026-10-11. Built and deployed but off unless
+      TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET are set: OAuth connect from the
+      admin page, EventSub webhooks with verified signatures, de-duplication and
+      revocation handling. Verified up to Twitch: all six subscriptions enabled
+      for the right channel, and a signed notification sent on the server
+      reached the overlay. Twitch then delivered no real follow or cheer, so
+      it was never shown working end to end, and the streamer stopped there.
 
 ## Deferred ideas
 
 - Donor-chosen text-to-speech voices (one multi-speaker Piper model, e.g.
   en_US-libritts_r-medium, CC BY 4.0, with named picks). Raised and set aside
   2026-10-11 in favour of platform alerts.
+- Kick and YouTube event alerts (were items 22 and 23). Dropped with Twitch on
+  2026-10-11. If Twitch is picked up again, try its EventSub WebSocket transport
+  and a channel.update delivery test before anything else.
