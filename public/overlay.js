@@ -75,7 +75,7 @@ async function showAlert(alert) {
   void card.offsetWidth;
   card.classList.add('is-visible');
   const shownAt = performance.now();
-  playAlertSound();
+  playAlertSound(alert);
   // The server decides per alert (e.g. below TTS_MIN_AMOUNT it is not spoken).
   const spoken = speechEnabled && alert.speak === true;
   if (spoken) {
@@ -85,7 +85,8 @@ async function showAlert(alert) {
   if (!wasSkipped) {
     // At least the configured duration, longer if the speech ran past it.
     const elapsedMs = performance.now() - shownAt;
-    const visibleMs = Math.max(alertDurationMs, spoken ? elapsedMs + holdAfterSpeechMs : 0);
+    // Event alerts carry their own duration; donations use the page setting.
+    const visibleMs = Math.max(alert.durationMs ?? alertDurationMs, spoken ? elapsedMs + holdAfterSpeechMs : 0);
     await waitUnlessSkipped(visibleMs - elapsedMs);
   }
   current = null;
@@ -96,6 +97,7 @@ async function showAlert(alert) {
 
 /** Built with textContent only: donor text must never be interpreted as HTML. */
 function renderCard(alert) {
+  if (alert.headline !== undefined) return renderEventCard(alert);
   const card = document.createElement('div');
   card.className = 'alert-card';
 
@@ -132,6 +134,51 @@ function renderCard(alert) {
   return card;
 }
 
+/**
+ * A follow, sub, gift, cheer or raid. The server has already worded it as
+ * parts; numbers are emphasised. A small platform badge sits above it.
+ */
+function renderEventCard(alert) {
+  const card = document.createElement('div');
+  card.className = `alert-card alert-card--event alert-card--${alert.kind}`;
+
+  if (alert.badge !== undefined) {
+    const badge = document.createElement('p');
+    badge.className = 'alert-badge';
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    icon.setAttribute('class', 'alert-badge__icon');
+    icon.setAttribute('viewBox', '0 0 24 24');
+    icon.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', alert.badge.iconPath);
+    icon.append(path);
+    badge.append(icon, alert.badge.label);
+    card.append(badge);
+  }
+
+  const headline = document.createElement('p');
+  headline.className = 'alert-headline';
+  for (const part of alert.headline) {
+    if (part.emphasis) {
+      const emphasis = document.createElement('span');
+      emphasis.className = 'alert-amount';
+      emphasis.textContent = part.text;
+      headline.append(emphasis);
+    } else {
+      headline.append(part.text);
+    }
+  }
+  card.append(headline);
+
+  if (alert.message !== '') {
+    const message = document.createElement('p');
+    message.className = 'alert-message';
+    message.textContent = alert.message;
+    card.append(message);
+  }
+  return card;
+}
+
 function acknowledge(id) {
   const url = new URL(`alerts/${encodeURIComponent(id)}/shown`, eventsUrl);
   // A failed acknowledgement only means the alert may be replayed later.
@@ -141,7 +188,14 @@ function acknowledge(id) {
 let audioContext;
 let customSound;
 
-function playAlertSound() {
+/** Custom event sounds, one element per file so each is fetched once. */
+const eventSounds = new Map();
+
+function playAlertSound(alert) {
+  if (alert.sound !== undefined) {
+    playEventSound(alert.sound);
+    return;
+  }
   if (soundSetting === 'none') return;
   if (soundSetting === 'chime') {
     playChime();
@@ -152,6 +206,59 @@ function playAlertSound() {
   customSound.currentTime = 0;
   // Rejected when the browser blocks autoplay; OBS does not, a normal tab may.
   customSound.play().catch(() => {});
+}
+
+function playEventSound(cue) {
+  if (cue.type === 'none') return;
+  if (cue.type === 'tone') {
+    playTone(cue.tone);
+    return;
+  }
+  const url = new URL(cue.path, eventsUrl).href;
+  if (!eventSounds.has(url)) eventSounds.set(url, new Audio(url));
+  const sound = eventSounds.get(url);
+  sound.currentTime = 0;
+  sound.play().catch(() => {});
+}
+
+/**
+ * Built-in tones, one per event kind, so they can be told apart by ear:
+ * frequencies (Hz), gap between notes (s), and each note's length (s).
+ */
+const eventTones = {
+  follow: { notes: [880], gap: 0, length: 0.35, wave: 'sine', volume: 0.18 },
+  sub: { notes: [523, 659, 784], gap: 0.12, length: 0.45, wave: 'triangle', volume: 0.22 },
+  gift: { notes: [523, 659, 784, 1047], gap: 0.09, length: 0.4, wave: 'triangle', volume: 0.22 },
+  cheer: { notes: [1047, 1319, 1568, 2093], gap: 0.06, length: 0.3, wave: 'sine', volume: 0.16 },
+  raid: { notes: [220, 330, 440, 660], gap: 0.16, length: 0.6, wave: 'sawtooth', volume: 0.1 },
+};
+
+function playTone(kind) {
+  const tone = eventTones[kind] ?? eventTones.follow;
+  playNotes(tone.notes, tone.gap, tone.length, tone.wave, tone.volume);
+}
+
+/** Plays notes in sequence with a quick attack and a soft decay. */
+function playNotes(frequencies, gap, length, wave, volume) {
+  try {
+    audioContext ??= new AudioContext();
+    const start = audioContext.currentTime;
+    frequencies.forEach((frequency, index) => {
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      const noteStart = start + index * gap;
+      oscillator.type = wave;
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0, noteStart);
+      gain.gain.linearRampToValueAtTime(volume, noteStart + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, noteStart + length);
+      oscillator.connect(gain).connect(audioContext.destination);
+      oscillator.start(noteStart);
+      oscillator.stop(noteStart + length);
+    });
+  } catch {
+    // No audio is better than no alert.
+  }
 }
 
 /**

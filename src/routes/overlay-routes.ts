@@ -32,6 +32,7 @@ import type { AlertSpeech } from '../tts/alert-speech.ts';
 import { validateDonationForm, type DonationFormValues } from '../donations/donation-form.ts';
 import type { DonationRepository } from '../donations/donation-repository.ts';
 import type { LeaderboardQueries } from '../donations/leaderboard.ts';
+import { switchableEventKinds, type StreamEvent, type StreamEventKind } from '../events/stream-event.ts';
 import { formatMoneyForDisplay } from '../money.ts';
 import { html } from '../web/html.ts';
 import { renderTestAlertPage } from '../web/pages.ts';
@@ -64,6 +65,8 @@ export type OverlayRouteDependencies = {
   readonly alertHub: AlertHub;
   /** Applies the streamer's filters; the only way alerts are built. */
   readonly presentAlert: AlertPresenter;
+  /** Presents and publishes a platform event; false when its kind is switched off. */
+  readonly publishEvent: (event: StreamEvent) => boolean;
   /** Prepares speech and fans the alert out; used for test alerts. */
   readonly publishAlert: (presented: PresentedAlert) => void;
   /** Starts speech for an alert published before this process started (a replay). */
@@ -84,7 +87,7 @@ const overlayContentSecurityPolicy =
 type TokenParams = { token: string };
 
 export function registerOverlayRoutes(app: FastifyInstance, dependencies: OverlayRouteDependencies): void {
-  const { config, donations, alertHub, presentAlert, publishAlert, prepareSpeech, alertSpeech, leaderboard } =
+  const { config, donations, alertHub, presentAlert, publishAlert, publishEvent, prepareSpeech, alertSpeech, leaderboard } =
     dependencies;
   const bannedWords = createBannedWordFilter(config.filters.bannedWords);
   const now = dependencies.now ?? (() => new Date());
@@ -245,6 +248,13 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
     return reply.sendFile(sound.fileName, config.alert.assetsDirectory);
   });
 
+  app.get<{ Params: TokenParams & { kind: string } }>('/overlay/:token/assets/sound/:kind', async (request, reply) => {
+    const kind = switchableEventKinds.find((candidate) => candidate === request.params.kind);
+    const sound = kind === undefined ? undefined : config.events.sounds[kind];
+    if (sound === undefined || sound.kind !== 'file') return reply.callNotFound();
+    return reply.sendFile(sound.fileName, config.alert.assetsDirectory);
+  });
+
   app.get<{ Params: TokenParams }>('/overlay/:token/assets/image', async (_request, reply) => {
     if (config.alert.imageFileName === null) return reply.callNotFound();
     return reply.sendFile(config.alert.imageFileName, config.alert.assetsDirectory);
@@ -258,9 +268,14 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
     listed: false,
   };
 
-  app.get<{ Params: TokenParams; Querystring: { sent?: string } }>('/overlay/:token/test', async (request, reply) => {
+  app.get<{ Params: TokenParams; Querystring: { sent?: string; event?: string } }>('/overlay/:token/test', async (request, reply) => {
     const sentTo = Number(request.query.sent);
-    const notice = Number.isInteger(sentTo) && sentTo >= 0 ? describeDelivery(sentTo) : undefined;
+    const notice =
+      request.query.event === 'off'
+        ? 'That kind of event is switched off in EVENT_ALERTS, so it would not alert on stream either.'
+        : request.query.sent !== undefined && Number.isInteger(sentTo) && sentTo >= 0
+          ? describeDelivery(sentTo)
+          : undefined;
     return sendHtml(
       reply,
       200,
@@ -304,6 +319,26 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
     request.log.info({ overlays: alertHub.subscriberCount }, 'Test alert sent');
     // Post/redirect/get, so refreshing the result does not send another alert.
     return reply.redirect(`test?sent=${alertHub.subscriberCount}`, 303);
+  });
+
+  /** Example data for each kind of test event, so every card can be previewed. */
+  const testEvents: Readonly<Record<StreamEventKind, Omit<StreamEvent, 'platform'>>> = {
+    follow: { kind: 'follow', actorName: 'TestFollower' },
+    sub: { kind: 'sub', actorName: 'TestSubscriber' },
+    resub: { kind: 'resub', actorName: 'TestSubscriber', months: 12, message: 'A whole year already, love the streams!' },
+    gift: { kind: 'gift', actorName: 'TestGifter', count: 5 },
+    cheer: { kind: 'cheer', actorName: 'TestCheerer', bits: 500, message: 'Take my bits!' },
+    raid: { kind: 'raid', actorName: 'TestRaider', viewers: 42 },
+  };
+
+  app.post<{ Params: TokenParams }>('/overlay/:token/test/event', async (request, reply) => {
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const sample = typeof body.kind === 'string' ? testEvents[body.kind as StreamEventKind] : undefined;
+    const platform = body.platform === 'kick' ? 'kick' : 'twitch';
+    if (sample === undefined) return reply.redirect('../test?event=unknown', 303);
+    const published = publishEvent({ platform, ...sample });
+    request.log.info({ kind: sample.kind, platform, published, overlays: alertHub.subscriberCount }, 'Test event sent');
+    return reply.redirect(published ? `../test?sent=${alertHub.subscriberCount}` : '../test?event=off', 303);
   });
 
   function streamAlerts(request: FastifyRequest, reply: FastifyReply): void {

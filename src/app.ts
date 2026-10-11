@@ -10,7 +10,11 @@ import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { AlertHub } from './alerts/alert-hub.ts';
+import { randomUUID } from 'node:crypto';
 import { createAlertPresenter, donationToAlertSource, type PresentedAlert } from './alerts/alert-presenter.ts';
+import { createBannedWordFilter } from './alerts/banned-words.ts';
+import { createEventPresenter } from './events/event-presenter.ts';
+import type { StreamEvent } from './events/stream-event.ts';
 import type { Config } from './config.ts';
 import type { DonationRepository } from './donations/donation-repository.ts';
 import type { LeaderboardQueries } from './donations/leaderboard.ts';
@@ -116,6 +120,19 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
   }
 
   /** The one way alerts reach overlays, so every alert gets its speech prepared first. */
+  const presentEvent = createEventPresenter(config.events, createBannedWordFilter(config.filters.bannedWords));
+
+  /**
+   * The one way platform events reach overlays.
+   * @returns false when the streamer has switched this kind of event off.
+   */
+  function publishEvent(event: StreamEvent, alertId = `event-${randomUUID()}`): boolean {
+    const alert = presentEvent(event, alertId);
+    if (alert === null) return false;
+    dependencies.alertHub.publish(alert);
+    return true;
+  }
+
   function publishAlert(presented: PresentedAlert): void {
     prepareSpeech(presented);
     dependencies.alertHub.publish(presented.alert);
@@ -157,6 +174,7 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
   });
   app.register(async (scope) => {
     registerOverlayRoutes(scope, {
+      publishEvent,
       config,
       donations: dependencies.donations,
       alertHub: dependencies.alertHub,

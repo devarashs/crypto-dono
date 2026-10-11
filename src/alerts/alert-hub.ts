@@ -5,6 +5,9 @@
  * published while no overlay is connected is not lost: the donation row keeps
  * `alert_shown_at` empty and the overlay replays it on its next connection.
  */
+import type { StreamEventKind, SwitchableEventKind } from '../events/stream-event.ts';
+import type { HeadlinePart } from './headline.ts';
+
 /**
  * What an overlay receives, already filtered (see alert-presenter.ts). Only
  * display fields; nothing about the payment internals.
@@ -24,7 +27,25 @@ export type OverlayAlert = {
    * deliberate replay must get through anyway.
    */
   readonly replay?: true;
+
+  // ── Platform events only (follows, subs, ...). Absent on donation alerts,
+  // which take their wording, sound and duration from the overlay page. ──
+
+  readonly kind?: StreamEventKind;
+  /** The wording, as parts; numbers are emphasised. */
+  readonly headline?: readonly HeadlinePart[];
+  /** Platform icon shown on the card, e.g. Twitch. */
+  readonly badge?: { readonly label: string; readonly iconPath: string };
+  readonly sound?: EventSoundCue;
+  readonly durationMs?: number;
 };
+
+/** How an event alert sounds: a built-in tone, silence, or a custom file. */
+export type EventSoundCue =
+  | { readonly type: 'tone'; readonly tone: SwitchableEventKind }
+  | { readonly type: 'none' }
+  /** Relative to the overlay page, e.g. "<token>/assets/sound/raid". */
+  | { readonly type: 'file'; readonly path: string };
 
 export type AlertListener = (alert: OverlayAlert) => void;
 
