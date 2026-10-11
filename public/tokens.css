@@ -116,4 +116,11 @@
   --overlay-enter-duration: 460ms;
   --overlay-exit-duration: 220ms;
   --overlay-enter-offset: -16px;
+  /* Text drawn straight on video, with no card behind it, needs its own halo
+   * in the void colour to stay readable over bright footage. */
+  --overlay-text-halo:
+    0 0 2px var(--color-void),
+    0 1px 2px var(--color-void),
+    0 0 6px var(--color-void),
+    0 0 14px color-mix(in srgb, var(--color-void) 70%, transparent);
 }
