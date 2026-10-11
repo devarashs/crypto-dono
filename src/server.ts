@@ -47,6 +47,13 @@ const app = buildApp(config, {
     apiKey: config.nowPayments.apiKey,
     baseUrl: config.nowPayments.baseUrl,
   }),
+  // Placeholder until the OBS overlay exists: the alert is logged, not shown.
+  onDonationAlert: (donation) => {
+    app.log.info(
+      { donationId: donation.publicId, donorName: donation.donorName, amountMinor: donation.amountMinor },
+      'Donation ready to alert',
+    );
+  },
 });
 app.addHook('onClose', async () => {
   database.close();

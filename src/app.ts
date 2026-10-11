@@ -10,15 +10,18 @@ import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { Config } from './config.ts';
-import type { DonationRepository } from './donations/donation-repository.ts';
+import type { Donation, DonationRepository } from './donations/donation-repository.ts';
 import type { NowPaymentsClient } from './nowpayments/nowpayments-client.ts';
 import { registerDonationRoutes, sendHtml } from './routes/donation-routes.ts';
+import { registerWebhookRoutes } from './routes/webhook-routes.ts';
 import { renderErrorPage } from './web/pages.ts';
 
 /** Collaborators the routes need, injected so tests can supply their own. */
 export type AppDependencies = {
   readonly donations: DonationRepository;
   readonly nowPayments: NowPaymentsClient;
+  /** Called once per donation, when its payment first reaches the alert threshold. */
+  readonly onDonationAlert: (donation: Donation) => void;
 };
 
 const publicDirectory = fileURLToPath(new URL('../public/', import.meta.url));
@@ -82,6 +85,9 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
 
   app.register(async (scope) => {
     registerDonationRoutes(scope, { config, ...dependencies });
+  });
+  app.register(async (scope) => {
+    registerWebhookRoutes(scope, { config, ...dependencies });
   });
 
   app.setNotFoundHandler((_request, reply) =>
