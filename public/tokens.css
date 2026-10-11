@@ -1,74 +1,119 @@
 /*
  * Design tokens shared by every page, including the OBS overlay. Components use
- * these and never raw colours or sizes, so a restyle is a change to this file.
+ * these and never a raw colour, size or duration, so restyling the whole app
+ * means editing this file.
+ *
+ * The look is retro-futuristic and matches the streamer's socials site: the
+ * colour, type, space, shape and motion values below are the same there.
  */
+
+/* Self-hosted (SIL Open Font License), served from the app at /fonts/, so the
+   page makes no third-party requests. Latin subset: other scripts in donor
+   names fall back to the system font. */
+@font-face {
+  font-family: 'Orbitron Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 900;
+  src: url('/fonts/orbitron-latin-wght-normal.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'Share Tech Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('/fonts/share-tech-mono-latin-400-normal.woff2') format('woff2');
+}
+
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
 
-  /* Warm neutrals; never pure black on pure white. */
-  --color-background: #f6f3ef;
-  --color-surface: #fffdfa;
-  --color-text: #2b2724;
-  --color-text-muted: #6b635c;
-  --color-border: #e5ded6;
-  --color-accent: #a34e2a;
-  --color-accent-hover: #8e4323;
-  --color-on-accent: #fffdfa;
-  --color-danger: #a8321f;
-  --color-focus: #a34e2a;
-  --color-notice-background: #f3ebe2;
+  /* ── Colour ─────────────────────────────────────────────────────────────
+   * Surfaces are purple-tinted near-blacks, never #000, and text is a soft
+   * lavender-white, never #fff: full contrast on a neon page is glare.
+   *
+   * Two neons with two distinct jobs, so colour keeps its meaning:
+   *   accent (cyan)  — interactive: links, buttons, focus, selection.
+   *   glow (magenta) — atmosphere: backdrop, title bloom. Never clickable.
+   */
+  --color-void: #0b0817;
+  --color-surface: #130f26;
+  --color-surface-raised: #1b1536;
+  --color-text: #e8e5f7;
+  /* Muted text still clears 4.5:1 against every surface above. */
+  --color-text-muted: #a6a2c8;
+  --color-accent: #2de2e6;
+  /* Text on a cyan fill: the void colour, about 12:1. */
+  --color-on-accent: #0b0817;
+  --color-glow: #ff3cac;
+  /* Errors: a warm coral, distinct from the magenta so it never reads as decor. */
+  --color-danger: #ff8a7a;
+  /* Gold, silver and bronze for the top three on the leaderboard. */
+  --color-rank-1: #ffd166;
+  --color-rank-2: #cfd3e6;
+  --color-rank-3: #e0a172;
 
-  --font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-size-small: 0.875rem;
-  --font-size-body: 1rem;
-  --font-size-title: 1.5rem;
-  --line-height: 1.5;
+  --color-accent-faint: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  --color-accent-soft: color-mix(in srgb, var(--color-accent) 32%, transparent);
+  --color-glow-faint: color-mix(in srgb, var(--color-glow) 18%, transparent);
+  --color-glow-soft: color-mix(in srgb, var(--color-glow) 45%, transparent);
+  --color-danger-faint: color-mix(in srgb, var(--color-danger) 14%, transparent);
+  --color-border: color-mix(in srgb, var(--color-text-muted) 22%, transparent);
 
+  /* ── Type ───────────────────────────────────────────────────────────── */
+  --font-display: 'Orbitron Variable', 'Eurostile', 'Arial Black', sans-serif;
+  --font-mono: 'Share Tech Mono', ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
+
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9375rem;
+  --text-base: 1.0625rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.625rem;
+  --text-hero: clamp(1.5rem, 6.4vw, 3.25rem);
+
+  --tracking-wide: 0.08em;
+  --tracking-wider: 0.18em;
+
+  /* ── Space (4px base) ───────────────────────────────────────────────── */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
   --space-4: 1rem;
-  --space-6: 1.5rem;
-  --space-8: 2rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4.5rem;
 
-  --radius-control: 0.625rem;
-  --radius-card: 1.25rem;
-  --shadow-card: 0 12px 40px -12px rgb(60 40 20 / 0.18);
+  --page-gutter: var(--space-4);
+  --content-width: 30rem;
+  --content-width-wide: 64rem;
 
-  --duration-fast: 120ms;
+  /* ── Shape: tight radii, the retro-terminal look wants hard geometry ── */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  /* Length of the neon corner brackets on panels. */
+  --bracket: 14px;
 
-  /*
-   * Overlay alert card. Fixed rather than following prefers-color-scheme: it sits
-   * on top of arbitrary video, so it needs its own dark surface to stay legible,
-   * whatever the OBS machine's theme is.
+  /* ── Motion ─────────────────────────────────────────────────────────────
+   * Everything animated moves `transform` or `opacity` only, so it stays on
+   * the compositor. Entrances ease out: fast start, soft landing.
    */
-  --overlay-surface: rgb(30 27 25 / 0.92);
-  --overlay-text: #f3eee8;
-  --overlay-text-muted: #cfc6bc;
-  --overlay-accent: #e0895d;
-  --overlay-radius: 1.5rem;
-  --overlay-shadow: 0 20px 60px -20px rgb(0 0 0 / 0.7);
+  --motion-fast: 140ms;
+  --motion-base: 220ms;
+  --motion-entrance: 460ms;
+  --motion-stagger: 55ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+
+  /* ── Overlay alert card ───────────────────────────────────────────────
+   * The card sits on arbitrary video, so it carries its own near-opaque
+   * surface and sizes for a 1080p canvas.
+   */
+  --overlay-surface: color-mix(in srgb, var(--color-surface) 94%, transparent);
   --overlay-font-size-headline: 3rem;
   --overlay-font-size-message: 2rem;
-  --overlay-enter-duration: 250ms;
-  --overlay-exit-duration: 200ms;
+  --overlay-enter-duration: 460ms;
+  --overlay-exit-duration: 220ms;
   --overlay-enter-offset: -16px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Dark grey, never pure black; text below pure white. */
-    --color-background: #1b1917;
-    --color-surface: #252220;
-    --color-text: #ebe6e0;
-    --color-text-muted: #ada49b;
-    --color-border: #3a3531;
-    --color-accent: #e0895d;
-    --color-accent-hover: #ea9b73;
-    --color-on-accent: #1b1917;
-    --color-danger: #f08a78;
-    --color-focus: #e0895d;
-    --color-notice-background: #2f2a26;
-    --shadow-card: 0 12px 40px -12px rgb(0 0 0 / 0.6);
-  }
 }

@@ -1,5 +1,14 @@
-/* Public pages: donation form, thank-you and error pages. */
+/*
+ * Every server-rendered page: donation, leaderboard, thanks, errors, test
+ * alerts and admin. The OBS overlay has its own overlay.css.
+ *
+ * Values come from tokens.css. Two rules keep the page smooth and secure:
+ *   - Only `transform` and `opacity` animate, so motion stays on the compositor.
+ *   - No inline style attributes: the content security policy forbids them.
+ */
 @import url('tokens.css');
+
+/* ── Reset and page defaults ───────────────────────────────────────────── */
 
 *,
 *::before,
@@ -7,217 +16,605 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  background: var(--color-void);
+}
+
 body {
   margin: 0;
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: var(--space-6) var(--space-4);
-  background: var(--color-background);
+  min-height: 100svh;
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  line-height: 1.55;
   color: var(--color-text);
-  font-family: var(--font-family);
-  font-size: var(--font-size-body);
-  line-height: var(--line-height);
+  -webkit-font-smoothing: antialiased;
 }
 
-.card {
+h1,
+h2,
+h3,
+p,
+dl,
+dd {
+  margin: 0;
+}
+
+/* One focus style for every interactive element. */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+::selection {
+  background: var(--color-glow-soft);
+  color: var(--color-text);
+}
+
+code {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+/* ── Backdrop: sky, horizon bloom, rolling neon grid, scanlines ─────────────
+ * Decorative and CSS-only. The only moving part is the grid's transform.
+ */
+
+.backdrop {
+  /* Where the floor meets the sky, from the top of the viewport. */
+  --horizon: 62%;
+  /* One grid square; the roll travels exactly this far, so the loop is seamless. */
+  --grid-cell: 56px;
+
+  position: fixed;
+  inset: 0;
+  /* lvh, so the scene does not jump when a phone's URL bar collapses. */
+  height: 100lvh;
+  z-index: -1;
+  overflow: hidden;
+  background: linear-gradient(
+    to bottom,
+    var(--color-void) 0%,
+    var(--color-surface) var(--horizon),
+    var(--color-void) 100%
+  );
+}
+
+.backdrop__bloom {
+  position: absolute;
+  left: 50%;
+  top: var(--horizon);
+  width: min(120vw, 70rem);
+  aspect-ratio: 2.4;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(closest-side, var(--color-glow-faint), transparent);
+}
+
+.backdrop__floor {
+  position: absolute;
+  top: var(--horizon);
+  bottom: 0;
+  /* Wider than the viewport: perspective narrows the far edge. */
+  left: -60%;
+  right: -60%;
+  perspective: 22rem;
+  perspective-origin: 50% 0;
+  overflow: hidden;
+}
+
+.backdrop__grid {
+  position: absolute;
+  top: calc(var(--grid-cell) * -1);
+  left: 0;
+  right: 0;
+  height: 300%;
+  transform-origin: 50% 0;
+  transform: rotateX(74deg);
+  background-image:
+    linear-gradient(to bottom, var(--color-glow-soft) 0 2px, transparent 2px),
+    linear-gradient(to right, var(--color-glow-soft) 0 2px, transparent 2px);
+  background-size: var(--grid-cell) var(--grid-cell);
+  background-position: center top;
+  animation: grid-roll 2.8s linear infinite;
+}
+
+/* translateY after rotateX slides along the tilted plane. */
+@keyframes grid-roll {
+  to {
+    transform: rotateX(74deg) translateY(var(--grid-cell));
+  }
+}
+
+/* Fades the far grid lines into the sky; an overlay, not a mask, so the
+   animated grid is not re-rasterised every frame. */
+.backdrop__horizon-fade {
+  position: absolute;
+  top: var(--horizon);
+  left: 0;
+  right: 0;
+  height: 22%;
+  background: linear-gradient(to bottom, var(--color-surface), transparent);
+}
+
+/* On the glass, above content, faint enough not to cost text contrast. */
+.scanlines {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgb(0 0 0 / 0.16) 0 1px, transparent 1px 3px);
+}
+
+/* ── Page column ───────────────────────────────────────────────────────── */
+
+.page {
   width: 100%;
-  max-width: 28rem;
-  padding: var(--space-8) var(--space-6);
-  background: var(--color-surface);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
+  max-width: calc(var(--content-width) + 2 * var(--page-gutter));
+  margin: 0 auto;
+  padding: var(--space-7) var(--page-gutter) var(--space-8);
+  display: grid;
+  gap: var(--space-6);
 }
 
-.card-wide {
-  max-width: 48rem;
+.page--wide {
+  max-width: calc(var(--content-width-wide) + 2 * var(--page-gutter));
 }
 
-h1 {
-  margin: 0 0 var(--space-2);
-  font-size: var(--font-size-title);
-  line-height: 1.25;
+/* ── Hero ──────────────────────────────────────────────────────────────── */
+
+.hero {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  text-align: center;
 }
 
-p {
-  margin: 0 0 var(--space-4);
+.hero__tagline {
+  max-width: 36rem;
+  color: var(--color-text-muted);
 }
+
+/* ── Glitch title: two tinted copies, clipped to bands, jolt sideways ───── */
+
+.glitch-title {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  font-family: var(--font-display);
+  font-size: var(--text-hero);
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+  text-shadow:
+    0 0 22px var(--color-glow-soft),
+    0 0 2px var(--color-glow);
+}
+
+.glitch-title__slice {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  text-shadow: none;
+  pointer-events: none;
+  /* Longhands: a nameless animation shorthand would be minified to none. */
+  animation-duration: 520ms;
+  animation-timing-function: steps(1, end);
+  animation-delay: 700ms;
+  animation-iteration-count: 1;
+}
+
+.glitch-title__slice--upper {
+  color: var(--color-accent);
+  clip-path: inset(12% 0 56% 0);
+  animation-name: glitch-jolt-left;
+}
+
+.glitch-title__slice--lower {
+  color: var(--color-glow);
+  clip-path: inset(58% 0 10% 0);
+  animation-name: glitch-jolt-right;
+}
+
+/* An animation restarts only when its name changes, so hover swaps them. */
+.glitch-title:hover .glitch-title__slice {
+  animation-delay: 0ms;
+}
+
+.glitch-title:hover .glitch-title__slice--upper {
+  animation-name: glitch-jolt-right;
+}
+
+.glitch-title:hover .glitch-title__slice--lower {
+  animation-name: glitch-jolt-left;
+}
+
+@keyframes glitch-jolt-left {
+  0% { opacity: 0.9; transform: translateX(-8px); }
+  18% { transform: translateX(5px); }
+  36% { opacity: 0; }
+  54% { opacity: 0.9; transform: translateX(-4px); }
+  72% { transform: translateX(7px); }
+  90% { opacity: 0; transform: none; }
+}
+
+@keyframes glitch-jolt-right {
+  0% { opacity: 0; }
+  12% { opacity: 0.9; transform: translateX(7px); }
+  30% { transform: translateX(-6px); }
+  48% { opacity: 0; }
+  66% { opacity: 0.9; transform: translateX(4px); }
+  84% { opacity: 0; transform: none; }
+}
+
+/* ── Entrance: fade up and settle, staggered by position ───────────────── */
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+/* No `to` frame and `backwards` fill: hidden during the delay, then the
+   element lets go of transform so hover transforms still work. */
+.rise-in {
+  animation: rise-in var(--motion-entrance) var(--ease-out) backwards;
+  animation-delay: calc(var(--motion-stagger) * var(--rise-order, 0));
+}
+
+.rise-in:nth-child(2) { --rise-order: 2; }
+.rise-in:nth-child(3) { --rise-order: 4; }
+.rise-in:nth-child(4) { --rise-order: 6; }
+
+/* ── Panels: the content surface, with neon corner brackets ─────────────── */
+
+.panel {
+  position: relative;
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+  min-width: 0;
+  padding: var(--space-5);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  border-radius: var(--radius-md);
+  /* Four tiny gradients draw the brackets, so they cost no markup. */
+  background:
+    linear-gradient(var(--color-accent), var(--color-accent)) top left / var(--bracket) 2px,
+    linear-gradient(var(--color-accent), var(--color-accent)) top left / 2px var(--bracket),
+    linear-gradient(var(--color-accent), var(--color-accent)) bottom right / var(--bracket) 2px,
+    linear-gradient(var(--color-accent), var(--color-accent)) bottom right / 2px var(--bracket),
+    linear-gradient(135deg, var(--color-surface-raised), var(--color-surface));
+  background-repeat: no-repeat;
+}
+
+.panel__title {
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.panel__heading {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 800;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  line-height: 1.2;
+  text-shadow: 0 0 18px var(--color-glow-faint);
+}
+
+.panel__footer {
+  margin-top: var(--space-2);
+}
+
+.donate-layout {
+  display: grid;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+/* Two columns once there is room: the form, and the leaderboard beside it. */
+@media (min-width: 60rem) {
+  .donate-layout:has(> :nth-child(2)) {
+    grid-template-columns: minmax(0, 26rem) minmax(0, 1fr);
+  }
+}
+
+.donate-layout:not(:has(> :nth-child(2))) {
+  max-width: var(--content-width);
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ── Text bits ─────────────────────────────────────────────────────────── */
 
 .muted {
   color: var(--color-text-muted);
-  font-size: var(--font-size-small);
+  font-size: var(--text-sm);
 }
 
 .footnote {
-  margin: var(--space-4) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.amount {
+  color: var(--color-accent);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.link {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent-soft);
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--motion-fast) var(--ease-out);
+}
+
+.link:hover {
+  text-decoration-color: var(--color-accent);
 }
 
 .notice {
-  margin-bottom: var(--space-6);
   padding: var(--space-3) var(--space-4);
-  background: var(--color-notice-background);
-  border-radius: var(--radius-control);
+  border-left: 2px solid var(--color-accent);
+  background: var(--color-accent-faint);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
 }
 
-form {
+.empty-state {
+  padding: var(--space-5) var(--space-4);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  text-align: center;
+  font-size: var(--text-sm);
+}
+
+/* ── Forms ─────────────────────────────────────────────────────────────── */
+
+.form {
   display: grid;
-  gap: var(--space-6);
-  margin-top: var(--space-6);
+  gap: var(--space-5);
 }
 
 .field {
   display: grid;
   gap: var(--space-2);
+  min-width: 0;
 }
 
-label {
-  font-weight: 600;
+.field__label {
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
 }
 
-.optional {
+.field__optional {
+  margin-left: var(--space-1);
+  font-family: var(--font-mono);
   font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--color-text-muted);
 }
 
-input,
-textarea {
+.field__hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.field__error {
+  font-size: var(--text-xs);
+  color: var(--color-danger);
+}
+
+.field__error::before {
+  content: '! ';
+}
+
+.input,
+.amount-input {
   width: 100%;
-  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
-  background: var(--color-background);
+  border-radius: var(--radius-sm);
+  background: var(--color-void);
   color: var(--color-text);
+  transition: border-color var(--motion-fast) var(--ease-out);
+}
+
+.input {
+  padding: var(--space-3);
   font: inherit;
 }
 
-textarea {
-  min-height: 6rem;
+.input--multiline {
+  min-height: 6.5rem;
   resize: vertical;
+}
+
+.input::placeholder {
+  color: var(--color-text-muted);
+  opacity: 0.7;
+}
+
+.input:hover,
+.amount-input:hover {
+  border-color: var(--color-accent-soft);
+}
+
+.input:focus-visible {
+  border-color: var(--color-accent);
+  outline-offset: 2px;
 }
 
 .amount-input {
   display: flex;
   align-items: center;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
-  background: var(--color-background);
-}
-
-.amount-input input {
-  border: none;
-  background: transparent;
-}
-
-.amount-input .currency {
-  padding-left: var(--space-4);
-  color: var(--color-text-muted);
-  font-weight: 600;
-  text-transform: uppercase;
 }
 
 .amount-input:focus-within {
-  outline: 2px solid var(--color-focus);
+  border-color: var(--color-accent);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
-.amount-input input:focus-visible {
+.amount-input__currency {
+  padding-left: var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.amount-input__field {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-3);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.amount-input__field:focus-visible {
   outline: none;
-}
-
-input:focus-visible,
-textarea:focus-visible,
-button:focus-visible,
-a:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 2px;
 }
 
 [aria-invalid='true'],
 .amount-input:has([aria-invalid='true']) {
   border-color: var(--color-danger);
+  background: var(--color-danger-faint);
 }
 
-.field-error {
-  margin: 0;
-  color: var(--color-danger);
-  font-size: var(--font-size-small);
-}
+/* ── Buttons ───────────────────────────────────────────────────────────── */
 
-.hint {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-small);
-}
-
-button {
-  padding: var(--space-3) var(--space-4);
-  border: none;
-  border-radius: var(--radius-control);
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 2.75rem;
+  padding: var(--space-3) var(--space-5);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
   background: var(--color-accent);
   color: var(--color-on-accent);
-  font: inherit;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
   cursor: pointer;
-  transition: background-color var(--duration-fast) ease-out;
+  box-shadow: 0 0 22px var(--color-accent-soft);
+  transition:
+    transform var(--motion-fast) var(--ease-out),
+    opacity var(--motion-fast) var(--ease-out);
 }
 
-button:hover {
-  background: var(--color-accent-hover);
+.button:hover {
+  transform: translateY(-2px);
 }
 
-a {
+.button:active {
+  transform: translateY(0);
+  opacity: 0.85;
+}
+
+.button--ghost {
+  background: transparent;
+  color: var(--color-accent);
+  box-shadow: none;
+}
+
+.button--small {
+  min-height: 2rem;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+}
+
+/* ── Tabs (leaderboard views, admin filters) ───────────────────────────── */
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tabs__tab {
+  margin-bottom: -1px;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-wide);
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+a.tabs__tab:hover {
   color: var(--color-accent);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  * {
-    transition: none !important;
-  }
+.tabs__tab--current {
+  border-bottom-color: var(--color-accent);
+  color: var(--color-text);
 }
 
-/* --- Admin ------------------------------------------------------------------ */
+/* ── Admin ─────────────────────────────────────────────────────────────── */
 
 .admin-header {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: var(--space-2);
+  gap: var(--space-3);
 }
 
-.admin-header form {
-  margin: 0;
-}
-
-.button-secondary {
-  background: transparent;
-  color: var(--color-accent);
-  border: 1px solid var(--color-border);
-}
-
-.button-secondary:hover {
-  background: var(--color-notice-background);
-}
-
-.links {
+.admin-links {
   display: grid;
-  gap: var(--space-2);
-  margin: var(--space-6) 0;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
   padding: var(--space-4);
-  background: var(--color-notice-background);
-  border-radius: var(--radius-control);
-  font-size: var(--font-size-small);
+  background: var(--color-void);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
 }
 
-.links code {
-  overflow-wrap: anywhere;
+.admin-links dt {
+  color: var(--color-text-muted);
 }
 
-.filter-links {
-  display: flex;
-  gap: var(--space-4);
-  margin-bottom: var(--space-4);
-  font-size: var(--font-size-small);
+@media (max-width: 36rem) {
+  .admin-links {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-links dd + dt {
+    margin-top: var(--space-2);
+  }
 }
 
 .donation-list {
@@ -232,42 +629,42 @@ a {
   display: grid;
   gap: var(--space-2);
   padding: var(--space-4);
+  background: var(--color-void);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
+  border-left: 2px solid var(--color-accent-soft);
+  border-radius: var(--radius-sm);
 }
 
-.donation-item header {
+.donation-item__header {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   gap: var(--space-2);
 }
 
-.donation-item p {
-  margin: 0;
+.donation-item__name,
+.donation-item__message {
+  overflow-wrap: anywhere;
 }
 
-.donation-meta {
+.donation-item__meta {
   color: var(--color-text-muted);
-  font-size: var(--font-size-small);
+  font-size: var(--text-xs);
 }
 
-.donation-actions {
+.donation-item__actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
 }
 
-.donation-actions form {
-  display: block;
-  margin: 0;
-}
+/* ── Reduced motion: stillness, site-wide ──────────────────────────────── */
 
-.donation-actions button {
-  padding: var(--space-1) var(--space-3);
-  font-size: var(--font-size-small);
-}
-
-.pagination {
-  margin-top: var(--space-6);
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }

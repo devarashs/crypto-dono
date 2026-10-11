@@ -7,7 +7,11 @@ import { formatMoneyForDisplay } from '../money.ts';
 import { html, type SafeHtml } from './html.ts';
 
 /**
- * @param options.wide A wider column, for the admin history list.
+ * The page shell: a fixed neon backdrop (grid floor, horizon bloom, scanlines,
+ * all CSS) behind a centred column.
+ *
+ * @param options.wide A wider column, for the donation page with its
+ *   leaderboard and for the admin history.
  */
 export function layout(title: string, content: SafeHtml, options: { wide?: boolean } = {}): SafeHtml {
   return html`<!doctype html>
@@ -15,13 +19,41 @@ export function layout(title: string, content: SafeHtml, options: { wide?: boole
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0b0817">
     <title>${title}</title>
+    <link rel="preload" href="/fonts/orbitron-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/static/styles.css">
   </head>
   <body>
-    <main class="card${options.wide === true ? ' card-wide' : ''}">${content}</main>
+    <div class="backdrop" aria-hidden="true">
+      <div class="backdrop__bloom"></div>
+      <div class="backdrop__floor"><div class="backdrop__grid"></div></div>
+      <div class="backdrop__horizon-fade"></div>
+    </div>
+    <div class="scanlines" aria-hidden="true"></div>
+    <main class="page${options.wide === true ? ' page--wide' : ''}">${content}</main>
   </body>
 </html>`;
+}
+
+/** A content surface with neon corner brackets. */
+export function panel(content: SafeHtml, options: { className?: string; label?: string } = {}): SafeHtml {
+  const className = options.className === undefined ? 'panel rise-in' : `panel rise-in ${options.className}`;
+  return options.label === undefined
+    ? html`<section class="${className}">${content}</section>`
+    : html`<section class="${className}" aria-label="${options.label}">${content}</section>`;
+}
+
+/**
+ * A heading with a brief RGB-split glitch on load and on hover. The two copies
+ * are aria-hidden, so the heading is announced once.
+ */
+export function glitchTitle(text: string): SafeHtml {
+  return html`<h1 class="glitch-title">
+    <span class="glitch-title__text">${text}</span>
+    <span class="glitch-title__slice glitch-title__slice--upper" aria-hidden="true">${text}</span>
+    <span class="glitch-title__slice glitch-title__slice--lower" aria-hidden="true">${text}</span>
+  </h1>`;
 }
 
 export type DonationPageModel = {
@@ -45,45 +77,58 @@ export function renderDonationPage(model: DonationPageModel): SafeHtml {
   const heading = model.streamerName === '' ? 'Support the stream' : `Support ${model.streamerName}`;
   const minimum = formatMoneyForDisplay(model.minAmountMinor, model.currency);
 
+  const form = html`
+    <h2 class="panel__title">Donate</h2>
+    ${model.notice !== undefined && html`<p class="notice" role="status">${model.notice}</p>`}
+    <form class="form" method="post" action="/donate" novalidate>
+      ${renderField({
+        id: 'donorName',
+        label: 'Name',
+        optional: true,
+        error: errors.donorName,
+        control: html`<input class="input" id="donorName" name="donorName" autocomplete="nickname"
+          value="${values.donorName}" placeholder="Anonymous"${errorAttributes('donorName', errors.donorName)}>`,
+      })}
+      ${renderField({
+        id: 'amount',
+        label: 'Amount',
+        error: errors.amount,
+        hint: errors.amount === undefined ? `Minimum ${minimum}` : undefined,
+        control: amountInput(model.currency, values.amount, errors.amount, true),
+      })}
+      ${renderField({
+        id: 'message',
+        label: 'Message',
+        optional: true,
+        error: errors.message,
+        hint: errors.message === undefined ? messageHint(model) : undefined,
+        control: html`<textarea class="input input--multiline" id="message" name="message"${errorAttributes('message', errors.message)}>${values.message}</textarea>`,
+      })}
+      <button class="button" type="submit">Continue to payment</button>
+    </form>
+    <p class="footnote">You pick a coin and pay on NOWPayments' checkout.</p>
+  `;
+
   return layout(
     heading,
     html`
-      <h1>${heading}</h1>
-      <p class="muted">Your name and message show up on stream once your payment is confirmed.</p>
-      ${model.notice !== undefined && html`<p class="notice" role="status">${model.notice}</p>`}
-      <form method="post" action="/donate" novalidate>
-        ${renderField({
-          id: 'donorName',
-          label: 'Name',
-          optional: true,
-          error: errors.donorName,
-          control: html`<input id="donorName" name="donorName" autocomplete="nickname"
-            value="${values.donorName}" placeholder="Anonymous"${errorAttributes('donorName', errors.donorName)}>`,
-        })}
-        ${renderField({
-          id: 'amount',
-          label: 'Amount',
-          error: errors.amount,
-          hint: errors.amount === undefined ? `Minimum ${minimum}` : undefined,
-          control: html`<div class="amount-input">
-            <span class="currency" aria-hidden="true">${model.currency}</span>
-            <input id="amount" name="amount" inputmode="decimal" required
-              value="${values.amount}"${errorAttributes('amount', errors.amount)}>
-          </div>`,
-        })}
-        ${renderField({
-          id: 'message',
-          label: 'Message',
-          optional: true,
-          error: errors.message,
-          hint: errors.message === undefined ? messageHint(model) : undefined,
-          control: html`<textarea id="message" name="message"${errorAttributes('message', errors.message)}>${values.message}</textarea>`,
-        })}
-        <button type="submit">Continue to payment</button>
-      </form>
-      <p class="muted footnote">You will choose a coin and pay on NOWPayments' checkout.</p>
+      <header class="hero rise-in">
+        ${glitchTitle(heading)}
+        <p class="hero__tagline">Your name and message hit the stream once your payment confirms.</p>
+      </header>
+      <div class="donate-layout">${panel(form, { className: 'panel--donate', label: 'Donate' })}</div>
     `,
+    { wide: true },
   );
+}
+
+/** Amount field with the currency code as a prefix. */
+function amountInput(currency: string, value: string, error: string | undefined, required: boolean): SafeHtml {
+  return html`<div class="amount-input">
+    <span class="amount-input__currency" aria-hidden="true">${currency}</span>
+    <input class="amount-input__field" id="amount" name="amount" inputmode="decimal"${required && html` required`}
+      value="${value}"${errorAttributes('amount', error)}>
+  </div>`;
 }
 
 /** Tells donors the limits before they type, not after they pay. */
@@ -104,15 +149,15 @@ export type FieldModel = {
 
 export function renderField(field: FieldModel): SafeHtml {
   return html`<div class="field">
-    <label for="${field.id}">${field.label}${field.optional === true && html` <span class="optional">(optional)</span>`}</label>
+    <label class="field__label" for="${field.id}">${field.label}${field.optional === true && html` <span class="field__optional">optional</span>`}</label>
     ${field.control}
-    ${field.hint !== undefined && html`<p class="hint">${field.hint}</p>`}
-    ${field.error !== undefined && html`<p class="field-error" id="${field.id}-error">${field.error}</p>`}
+    ${field.hint !== undefined && html`<p class="field__hint">${field.hint}</p>`}
+    ${field.error !== undefined && html`<p class="field__error" id="${field.id}-error">${field.error}</p>`}
   </div>`;
 }
 
 /** Links an invalid control to its message so screen readers announce it. */
-function errorAttributes(id: string, error: string | undefined): SafeHtml {
+export function errorAttributes(id: string, error: string | undefined): SafeHtml {
   return error === undefined ? html`` : html` aria-invalid="true" aria-describedby="${id}-error"`;
 }
 
@@ -129,23 +174,24 @@ export function renderThanksPage(model: ThanksPageModel): SafeHtml {
       : undefined;
   return layout(
     'Thank you',
-    html`
-      <h1>Thank you${model.donorName !== undefined && html`, ${model.donorName}`}!</h1>
-      <p>${amount !== undefined ? html`Your ${amount} donation` : 'Your donation'} will appear on stream once the
-        payment is confirmed on the blockchain. That can take from a few seconds to several minutes, depending on the coin.</p>
-      <p class="muted"><a href="/">Make another donation</a></p>
-    `,
+    panel(html`
+      <h1 class="panel__heading">Thank you${model.donorName !== undefined && html`, ${model.donorName}`}!</h1>
+      <p>${amount !== undefined ? html`Your <strong class="amount">${amount}</strong> donation` : 'Your donation'} will
+        appear on stream once the payment is confirmed on the blockchain. That takes from a few seconds to several
+        minutes, depending on the coin.</p>
+      <p class="panel__footer"><a class="link" href="/">Make another donation</a></p>
+    `),
   );
 }
 
 export function renderErrorPage(title: string, message: string): SafeHtml {
   return layout(
     title,
-    html`
-      <h1>${title}</h1>
+    panel(html`
+      <h1 class="panel__heading">${title}</h1>
       <p>${message}</p>
-      <p class="muted"><a href="/">Back to the donation page</a></p>
-    `,
+      <p class="panel__footer"><a class="link" href="/">Back to the donation page</a></p>
+    `),
   );
 }
 
@@ -165,35 +211,32 @@ export function renderTestAlertPage(model: TestAlertPageModel): SafeHtml {
   const errors = model.errors ?? {};
   return layout(
     'Send a test alert',
-    html`
-      <h1>Send a test alert</h1>
+    panel(html`
+      <h1 class="panel__heading">Test alert</h1>
       <p class="muted">Shows a fake donation on every connected overlay. Nothing is charged or saved.</p>
       ${model.notice !== undefined && html`<p class="notice" role="status">${model.notice}</p>`}
-      <form method="post" action="" novalidate>
+      <form class="form" method="post" action="" novalidate>
         ${renderField({
           id: 'donorName',
           label: 'Name',
           error: errors.donorName,
-          control: html`<input id="donorName" name="donorName" value="${model.values.donorName}"${errorAttributes('donorName', errors.donorName)}>`,
+          control: html`<input class="input" id="donorName" name="donorName" value="${model.values.donorName}"${errorAttributes('donorName', errors.donorName)}>`,
         })}
         ${renderField({
           id: 'amount',
           label: 'Amount',
           error: errors.amount,
-          control: html`<div class="amount-input">
-            <span class="currency" aria-hidden="true">${model.currency}</span>
-            <input id="amount" name="amount" inputmode="decimal" value="${model.values.amount}"${errorAttributes('amount', errors.amount)}>
-          </div>`,
+          control: amountInput(model.currency, model.values.amount, errors.amount, false),
         })}
         ${renderField({
           id: 'message',
           label: 'Message',
           optional: true,
           error: errors.message,
-          control: html`<textarea id="message" name="message"${errorAttributes('message', errors.message)}>${model.values.message}</textarea>`,
+          control: html`<textarea class="input input--multiline" id="message" name="message"${errorAttributes('message', errors.message)}>${model.values.message}</textarea>`,
         })}
-        <button type="submit">Send test alert</button>
+        <button class="button" type="submit">Send test alert</button>
       </form>
-    `,
+    `),
   );
 }

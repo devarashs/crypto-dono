@@ -1,4 +1,8 @@
-/* OBS overlay: transparent page, one alert card at a time. */
+/*
+ * OBS overlay: a transparent page showing one alert card at a time.
+ * Same design system as the site (tokens.css), sized for a 1080p canvas.
+ * Only `transform` and `opacity` animate.
+ */
 @import url('tokens.css');
 
 html,
@@ -10,8 +14,10 @@ body {
 }
 
 body {
-  font-family: var(--font-family);
+  font-family: var(--font-mono);
+  color: var(--color-text);
   line-height: 1.3;
+  -webkit-font-smoothing: antialiased;
 }
 
 #alert-stage {
@@ -25,26 +31,47 @@ body {
 }
 
 .alert-card {
+  position: relative;
   max-width: min(60rem, 90vw);
-  padding: var(--space-6) var(--space-8);
-  background: var(--overlay-surface);
-  color: var(--overlay-text);
-  border-radius: var(--overlay-radius);
-  box-shadow: var(--overlay-shadow);
+  padding: var(--space-6) var(--space-7);
   text-align: center;
+  border-radius: var(--radius-md);
+  box-shadow:
+    inset 0 0 0 1px var(--color-accent-soft),
+    0 0 60px var(--color-glow-faint),
+    0 24px 60px -24px rgb(0 0 0 / 0.8);
+  /* Neon corner brackets over the card surface, as on the site's panels. */
+  background:
+    linear-gradient(var(--color-accent), var(--color-accent)) top left / 28px 3px,
+    linear-gradient(var(--color-accent), var(--color-accent)) top left / 3px 28px,
+    linear-gradient(var(--color-accent), var(--color-accent)) bottom right / 28px 3px,
+    linear-gradient(var(--color-accent), var(--color-accent)) bottom right / 3px 28px,
+    linear-gradient(135deg, var(--color-surface-raised), var(--overlay-surface));
+  background-repeat: no-repeat;
   opacity: 0;
   transform: translateY(var(--overlay-enter-offset));
   transition:
-    opacity var(--overlay-exit-duration) ease-in,
-    transform var(--overlay-exit-duration) ease-in;
+    opacity var(--overlay-exit-duration) var(--ease-in),
+    transform var(--overlay-exit-duration) var(--ease-in);
 }
 
 .alert-card.is-visible {
   opacity: 1;
   transform: none;
   transition:
-    opacity var(--overlay-enter-duration) ease-out,
-    transform var(--overlay-enter-duration) ease-out;
+    opacity var(--overlay-enter-duration) var(--ease-out),
+    transform var(--overlay-enter-duration) var(--ease-out);
+  /* A CRT power-on flicker on arrival: a few stepped opacity frames. */
+  animation: alert-flicker 360ms steps(1, end) 1;
+}
+
+@keyframes alert-flicker {
+  0% { opacity: 0.2; }
+  20% { opacity: 0.9; }
+  35% { opacity: 0.4; }
+  55% { opacity: 1; }
+  70% { opacity: 0.75; }
+  85% { opacity: 1; }
 }
 
 .alert-image {
@@ -52,23 +79,33 @@ body {
   max-width: 100%;
   max-height: 30vh;
   margin: 0 auto var(--space-4);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-sm);
 }
 
 .alert-headline {
   margin: 0;
+  font-family: var(--font-display);
   font-size: var(--overlay-font-size-headline);
-  font-weight: 700;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+  text-shadow:
+    0 0 26px var(--color-glow-soft),
+    0 0 2px var(--color-glow);
 }
 
 .alert-amount {
-  color: var(--overlay-accent);
+  color: var(--color-accent);
+  text-shadow:
+    0 0 24px var(--color-accent-soft),
+    0 0 2px var(--color-accent);
 }
 
 .alert-message {
-  margin: var(--space-3) 0 0;
+  margin: var(--space-4) 0 0;
   font-size: var(--overlay-font-size-message);
-  color: var(--overlay-text-muted);
+  color: var(--color-text);
   overflow-wrap: anywhere;
 }
 
@@ -76,6 +113,7 @@ body {
   .alert-card,
   .alert-card.is-visible {
     transform: none;
+    animation: none;
     transition: opacity var(--overlay-enter-duration) linear;
   }
 }
