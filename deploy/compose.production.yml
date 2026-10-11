@@ -1,0 +1,49 @@
+# Production overlay for docker-compose.yml: Caddy in front for HTTPS, and the
+# app no longer published on a host port, so Caddy is the only way in.
+#
+# Selected through .env on the server, so a plain `docker compose up -d` uses it:
+#   COMPOSE_FILE=docker-compose.yml:deploy/compose.production.yml
+#   COMPOSE_PROFILES=tts
+# See deploy/README.md.
+services:
+  crypto-dono:
+    # Reachable only by Caddy over the compose network.
+    ports: !reset []
+    expose:
+      - "3000"
+    logging:
+      driver: json-file
+      # Small disk: keep at most ~30 MB of logs per container.
+      options: { max-size: "10m", max-file: "3" }
+
+  piper:
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  caddy:
+    image: caddy:2.11-alpine
+    restart: unless-stopped
+    depends_on:
+      - crypto-dono
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      # The public hostname, e.g. dono.example.com. Caddy fetches and renews its
+      # certificate automatically; the DNS record must point here first.
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env to your public hostname}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates live here; losing them means re-issuing, which Let's
+      # Encrypt rate-limits, so they get a volume.
+      - caddy-data:/data
+      - caddy-config:/config
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  caddy-data:
+  caddy-config:
