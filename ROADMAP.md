@@ -46,8 +46,13 @@ Each can be revisited; none is load-bearing enough to block work.
 
 ## Phase 2 — Alerts
 
-- [ ] 5. Spike: establish whether browser speech synthesis produces audio inside the
+- [x] 5. Spike: establish whether browser speech synthesis produces audio inside the
       OBS Browser Source. The outcome decides the design of item 8.
+      Result (OBS 32.2.2, CEF Chrome 127, Windows, 2026-10-11): speechSynthesis works
+      and lists the three Windows SAPI voices, but its audio goes straight to the OS
+      output device. With "Control audio via OBS" ticked the speech disappears while
+      Web Audio still plays, so browser speech can never be mixed or routed in OBS,
+      and its voices depend on the streaming machine's OS.
 - [ ] 6. Donations appear as alerts in OBS: token-protected overlay, Server-Sent
       Events, queued playback, missed alerts replayed after a reconnect.
 - [ ] 7. The streamer can restyle alerts (sound, image, duration, template) without
