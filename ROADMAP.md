@@ -168,10 +168,12 @@ replacing StreamElements for these. Twitch and Kick push events in real time;
 YouTube cannot (no push for new subscribers; the subscriber list only shows
 public subscriptions and lags), so it comes last and with its limits stated.
 
-- [ ] 20. The overlay shows platform events alongside donations, in one queue:
+- [x] 20. The overlay shows platform events alongside donations, in one queue:
       follow, subscription (new and resub with months), gift subs (one alert per
       gift), cheer, raid. Per-kind wording and sound from .env, a platform icon on
       each card, and test buttons for every kind on the test-alert page.
+      Verified in Chromium: raid, follow (compact card) and resub with message,
+      queued behind a pending donation, with Twitch and Kick badges.
 - [ ] 21. Twitch: the streamer connects Twitch from the admin page (OAuth), and
       EventSub webhooks deliver follows, subs, resubs, gift subs, cheers and raids.
       Signatures verified, duplicate deliveries ignored, revocations handled.
