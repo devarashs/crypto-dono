@@ -43,6 +43,10 @@ function openDatabaseOrExit(path: string) {
   }
 }
 
+// ROLLBACK DRILL: crashes only on the production server (DOMAIN is set there,
+// not in CI). Reverted in the next commit.
+if (process.env.DOMAIN !== undefined) throw new Error('Deliberate rollback drill');
+
 const config = loadConfigOrExit();
 // Opened, and migrated, before listening: a schema problem should stop the boot,
 // not surface as a failed donation.
