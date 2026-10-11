@@ -13,6 +13,7 @@ import type { AlertHub } from './alerts/alert-hub.ts';
 import { createAlertPresenter, donationToAlertSource, type PresentedAlert } from './alerts/alert-presenter.ts';
 import type { Config } from './config.ts';
 import type { DonationRepository } from './donations/donation-repository.ts';
+import type { LeaderboardQueries } from './donations/leaderboard.ts';
 import type { NowPaymentsClient } from './nowpayments/nowpayments-client.ts';
 import { registerAdminRoutes } from './routes/admin-routes.ts';
 import { registerDonationRoutes, sendHtml } from './routes/donation-routes.ts';
@@ -24,6 +25,8 @@ import { renderErrorPage } from './web/pages.ts';
 /** Collaborators the routes need, injected so tests can supply their own. */
 export type AppDependencies = {
   readonly donations: DonationRepository;
+  /** Read-only queries behind the public leaderboard. */
+  readonly leaderboard: LeaderboardQueries;
   readonly nowPayments: NowPaymentsClient;
   /** Receives each donation's alert once, and fans it out to connected overlays. */
   readonly alertHub: AlertHub;

@@ -83,7 +83,7 @@ function renderDonationItem(donation: Donation): SafeHtml {
     <p class="donation-item__meta">
       <time datetime="${donation.createdAt}">${formatTimestamp(donation.createdAt)}</time>
       · ${describeStatus(donation)}${donation.payCurrency !== null && html` · ${donation.payCurrency.toUpperCase()}`}
-      · ${alertState}
+      · ${alertState}${!donation.showOnLeaderboard && html` · Hidden from leaderboard`}
     </p>
     ${donation.alertTriggeredAt !== null &&
     html`<div class="donation-item__actions">

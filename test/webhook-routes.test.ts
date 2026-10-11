@@ -1,3 +1,4 @@
+import { createInMemoryStore } from './support/in-memory-store.ts';
 import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
@@ -42,7 +43,8 @@ describe('POST /webhooks/nowpayments', () => {
       ALERT_ON_STATUS: alertOnStatus,
       LOG_LEVEL: 'fatal',
     });
-    donations = createDonationRepository(openDatabase(':memory:'));
+    const store = createInMemoryStore();
+    donations = store.donations;
     onDonationAlert = vi.fn(alertHandler);
     // The hub swallows listener errors, so a throwing handler is wrapped to reach
     // the webhook's own guard through a hub that rethrows.
@@ -52,6 +54,7 @@ describe('POST /webhooks/nowpayments', () => {
     alertHub.subscribe(onDonationAlert);
     app = buildApp(config, {
       donations,
+      leaderboard: store.leaderboard,
       nowPayments: {
         createInvoice: vi.fn(async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/payment/?iid=1' })),
       },

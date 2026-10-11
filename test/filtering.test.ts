@@ -3,6 +3,7 @@
  * a live payment webhook, a replay to a reconnecting overlay, a test alert, and
  * speech rebuilt after a restart.
  */
+import { createInMemoryStore } from './support/in-memory-store.ts';
 import { createHmac } from 'node:crypto';
 import { get as httpGet } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -47,7 +48,8 @@ describe('message filters, end to end', () => {
       TTS_MIN_AMOUNT: '5',
       MESSAGE_MAX_LENGTH: '40',
     });
-    donations = createDonationRepository(openDatabase(':memory:'));
+    const store = createInMemoryStore();
+    donations = store.donations;
     const alertHub = createAlertHub();
     published = [];
     alertHub.subscribe((alert) => published.push(alert));
@@ -60,6 +62,7 @@ describe('message filters, end to end', () => {
     });
     app = buildApp(config, {
       donations,
+      leaderboard: store.leaderboard,
       nowPayments: { createInvoice: async () => ({ invoiceId: 'inv', invoiceUrl: 'https://nowpayments.io/x' }) },
       alertHub,
       alertSpeech: createAlertSpeech({ synthesize }),

@@ -6,13 +6,15 @@
  *   GET  /thanks    where NOWPayments sends the donor after paying
  */
 import type { FastifyInstance, FastifyReply } from 'fastify';
+import { createBannedWordFilter } from '../alerts/banned-words.ts';
 import type { Config } from '../config.ts';
 import { validateDonationForm } from '../donations/donation-form.ts';
 import type { DonationRepository } from '../donations/donation-repository.ts';
+import type { LeaderboardQueries } from '../donations/leaderboard.ts';
 import { formatMinorUnits, formatMoneyForDisplay } from '../money.ts';
 import type { NowPaymentsClient } from '../nowpayments/nowpayments-client.ts';
 import type { SafeHtml } from '../web/html.ts';
-import { renderDonationPage, renderErrorPage, renderThanksPage } from '../web/pages.ts';
+import { renderDonationPage, renderErrorPage, renderThanksPage, type LeaderboardModel } from '../web/pages.ts';
 
 /** Path NOWPayments posts payment status changes to; handled by the webhook routes. */
 export const nowPaymentsWebhookPath = '/webhooks/nowpayments';
@@ -20,11 +22,35 @@ export const nowPaymentsWebhookPath = '/webhooks/nowpayments';
 export type DonationRouteDependencies = {
   readonly config: Config;
   readonly donations: DonationRepository;
+  readonly leaderboard: LeaderboardQueries;
   readonly nowPayments: NowPaymentsClient;
 };
 
+/** Rows on each leaderboard view. */
+const topDonorLimit = 100;
+const recentLimit = 25;
+
 export function registerDonationRoutes(app: FastifyInstance, dependencies: DonationRouteDependencies): void {
-  const { config, donations, nowPayments } = dependencies;
+  const { config, donations, leaderboard, nowPayments } = dependencies;
+  const bannedWords = createBannedWordFilter(config.filters.bannedWords);
+
+  /**
+   * Read on every page view: a single streamer's donation volume makes these
+   * two indexed, bounded queries cheap, and the board is never stale.
+   */
+  function loadLeaderboard(): LeaderboardModel | null {
+    if (!config.leaderboardEnabled) return null;
+    const currency = config.donation.currency;
+    return {
+      currency,
+      topDonors: leaderboard
+        .topDonors(currency, topDonorLimit)
+        .map((donor) => ({ ...donor, donorName: bannedWords.mask(donor.donorName) })),
+      recent: leaderboard
+        .recent(currency, recentLimit)
+        .map((donation) => ({ ...donation, donorName: bannedWords.mask(donation.donorName) })),
+    };
+  }
   const formRules = { ...config.donation, messageMaxLength: config.filters.messageMaxLength };
   const presets = config.donation.presetsMinor.map((amountMinor) => ({
     value: formatMinorUnits(amountMinor, config.donation.fractionDigits),
@@ -44,7 +70,11 @@ export function registerDonationRoutes(app: FastifyInstance, dependencies: Donat
   app.get<{ Querystring: { cancelled?: string } }>('/', async (request, reply) => {
     const notice =
       request.query.cancelled === undefined ? undefined : "The payment didn't go through. You can try again below.";
-    return sendHtml(reply, 200, renderDonationPage({ ...pageModel, ...(notice !== undefined && { notice }) }));
+    return sendHtml(
+      reply,
+      200,
+      renderDonationPage({ ...pageModel, leaderboard: loadLeaderboard(), ...(notice !== undefined && { notice }) }),
+    );
   });
 
   app.post(
@@ -57,12 +87,22 @@ export function registerDonationRoutes(app: FastifyInstance, dependencies: Donat
     async (request, reply) => {
       const result = validateDonationForm(request.body, formRules);
       if (!result.ok) {
-        return sendHtml(reply, 400, renderDonationPage({ ...pageModel, values: result.values, errors: result.errors }));
+        return sendHtml(
+          reply,
+          400,
+          renderDonationPage({ ...pageModel, leaderboard: loadLeaderboard(), values: result.values, errors: result.errors }),
+        );
       }
 
       // Stored first, so the name and message survive even if the invoice call fails
       // or the donor abandons checkout.
-      const donation = donations.create({ ...result.donation, currency: config.donation.currency });
+      const donation = donations.create({
+        ...result.donation,
+        currency: config.donation.currency,
+        // With the leaderboard off the donor was never asked, so never list them:
+        // turning it on later must not publish names collected without the choice.
+        showOnLeaderboard: config.leaderboardEnabled && result.donation.showOnLeaderboard,
+      });
 
       let invoice;
       try {

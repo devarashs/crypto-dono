@@ -71,6 +71,15 @@ export type DonationPageModel = {
   readonly errors?: DonationFormErrors;
   /** A one-line message above the form, e.g. after a cancelled payment. */
   readonly notice?: string;
+  /** The public leaderboard, or `null` when LEADERBOARD is off. */
+  readonly leaderboard: LeaderboardModel | null;
+};
+
+export type LeaderboardModel = {
+  readonly currency: string;
+  /** Names already masked for banned words. */
+  readonly topDonors: readonly { donorName: string; totalMinor: number; lastDonatedAt: string }[];
+  readonly recent: readonly { donorName: string; amountMinor: number; donatedAt: string }[];
 };
 
 export type AmountPreset = {
@@ -82,7 +91,8 @@ export type AmountPreset = {
 
 export function renderDonationPage(model: DonationPageModel): SafeHtml {
   const errors = model.errors ?? {};
-  const values = model.values ?? { donorName: '', amount: '', message: '' };
+  // A fresh form starts with the leaderboard box ticked: listing is opt-out.
+  const values = model.values ?? { donorName: '', amount: '', message: '', listed: true };
   const heading = model.streamerName === '' ? 'Support the stream' : `Support ${model.streamerName}`;
   const minimum = formatMoneyForDisplay(model.minAmountMinor, model.currency);
 
@@ -115,6 +125,13 @@ export function renderDonationPage(model: DonationPageModel): SafeHtml {
         hint: errors.message === undefined ? messageHint(model) : undefined,
         control: html`<textarea class="input input--multiline" id="message" name="message"${errorAttributes('message', errors.message)}>${values.message}</textarea>`,
       })}
+      ${model.leaderboard !== null &&
+      html`<label class="checkbox">
+        <input class="checkbox__input" type="checkbox" name="listed"${values.listed && html` checked`}>
+        <span class="checkbox__box" aria-hidden="true"></span>
+        <span class="checkbox__label">Show me on the public leaderboard
+          <span class="checkbox__hint">Name and amount only, never your message.</span></span>
+      </label>`}
       <button class="button" type="submit">Continue to payment</button>
     </form>
     <p class="footnote">You pick a coin and pay on NOWPayments' checkout.</p>
@@ -127,7 +144,10 @@ export function renderDonationPage(model: DonationPageModel): SafeHtml {
         ${glitchTitle(heading)}
         <p class="hero__tagline">Your name and message hit the stream once your payment confirms.</p>
       </header>
-      <div class="donate-layout">${panel(form, { className: 'panel--donate', label: 'Donate' })}</div>
+      <div class="donate-layout">
+        ${panel(form, { className: 'panel--donate', label: 'Donate' })}
+        ${model.leaderboard !== null && panel(renderLeaderboard(model.leaderboard), { className: 'panel--board', label: 'Leaderboard' })}
+      </div>
     `,
     { wide: true },
   );
@@ -169,6 +189,77 @@ function renderAmountPicker(
       ? html`<p class="field__hint">Minimum ${minimum}</p>`
       : html`<p class="field__error" id="amount-error">${error}</p>`}
   </fieldset>`;
+}
+
+/**
+ * Two views, "Top 100 donors" and "Recent", switched by a pair of radio buttons
+ * and CSS (see styles.css): no JavaScript, and no reload that would wipe a
+ * half-filled donation form.
+ */
+function renderLeaderboard(board: LeaderboardModel): SafeHtml {
+  const money = (amountMinor: number) => formatMoneyForDisplay(amountMinor, board.currency);
+  const empty = html`<p class="empty-state">No donors yet. Be the first.</p>`;
+
+  const topTable =
+    board.topDonors.length === 0
+      ? empty
+      : html`<table class="board-table">
+          <caption class="visually-hidden">Top donors by total donated</caption>
+          <thead><tr>
+            <th scope="col" class="board-table__rank">#</th>
+            <th scope="col">Donor</th>
+            <th scope="col" class="board-table__number">Total</th>
+            <th scope="col" class="board-table__date">Latest</th>
+          </tr></thead>
+          <tbody>${board.topDonors.map(
+            (donor, index) => html`<tr class="board-table__row${index < 3 ? ` board-table__row--top-${index + 1}` : ''}">
+              <td class="board-table__rank">${index + 1}</td>
+              <td class="board-table__name">${donor.donorName}</td>
+              <td class="board-table__number">${money(donor.totalMinor)}</td>
+              <td class="board-table__date"><time datetime="${donor.lastDonatedAt}">${formatDate(donor.lastDonatedAt)}</time></td>
+            </tr>`,
+          )}</tbody>
+        </table>`;
+
+  const recentTable =
+    board.recent.length === 0
+      ? empty
+      : html`<table class="board-table">
+          <caption class="visually-hidden">Most recent donations</caption>
+          <thead><tr>
+            <th scope="col">Donor</th>
+            <th scope="col" class="board-table__number">Amount</th>
+            <th scope="col" class="board-table__date">Date</th>
+          </tr></thead>
+          <tbody>${board.recent.map(
+            (donation) => html`<tr class="board-table__row">
+              <td class="board-table__name">${donation.donorName}</td>
+              <td class="board-table__number">${money(donation.amountMinor)}</td>
+              <td class="board-table__date"><time datetime="${donation.donatedAt}">${formatDate(donation.donatedAt)}</time></td>
+            </tr>`,
+          )}</tbody>
+        </table>`;
+
+  return html`
+    <h2 class="panel__title">Leaderboard</h2>
+    <div class="board">
+      <input class="board__toggle visually-hidden" type="radio" name="board-view" id="board-top" checked>
+      <input class="board__toggle visually-hidden" type="radio" name="board-view" id="board-recent">
+      <div class="tabs">
+        <label class="tabs__tab" for="board-top">Top 100 donors</label>
+        <label class="tabs__tab" for="board-recent">Recent</label>
+      </div>
+      <div class="board__view board__view--top" tabindex="0" aria-label="Top 100 donors">${topTable}</div>
+      <div class="board__view board__view--recent" tabindex="0" aria-label="Recent donations">${recentTable}</div>
+    </div>
+  `;
+}
+
+/** "Oct 11, 2026", in UTC: the server cannot know the viewer's time zone. */
+function formatDate(isoTimestamp: string): string {
+  return new Intl.DateTimeFormat('en', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(
+    new Date(isoTimestamp),
+  );
 }
 
 /** Amount field with the currency code as a prefix. */
