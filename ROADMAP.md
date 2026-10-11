@@ -90,5 +90,8 @@ Each can be revisited; none is load-bearing enough to block work.
 
 ## Phase 4 — Open-source release
 
-- [ ] 11. Someone else can self-host it from the README alone: NOWPayments setup,
+- [x] 11. Someone else can self-host it from the README alone: NOWPayments setup,
       deployment (VPS, PaaS, home PC behind a tunnel), OBS setup. Licence and CI.
+      Verified by following the Quick start on a fresh clone with Docker Compose,
+      and by running the CI test job (typecheck, 416 tests) on Linux. The GitHub
+      Actions workflow itself has not run yet: the repository is not on GitHub.
