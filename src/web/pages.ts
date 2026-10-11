@@ -134,3 +134,52 @@ export function renderErrorPage(title: string, message: string): SafeHtml {
     `,
   );
 }
+
+export type TestAlertPageModel = {
+  readonly currency: string;
+  readonly values: DonationFormValues;
+  readonly errors?: DonationFormErrors;
+  /** Result of the last send, e.g. "Sent to 1 overlay." */
+  readonly notice?: string;
+};
+
+/**
+ * Lets the streamer fire a fake alert at connected overlays, to set up OBS
+ * without making a payment. Served under the overlay token, never linked publicly.
+ */
+export function renderTestAlertPage(model: TestAlertPageModel): SafeHtml {
+  const errors = model.errors ?? {};
+  return layout(
+    'Send a test alert',
+    html`
+      <h1>Send a test alert</h1>
+      <p class="muted">Shows a fake donation on every connected overlay. Nothing is charged or saved.</p>
+      ${model.notice !== undefined && html`<p class="notice" role="status">${model.notice}</p>`}
+      <form method="post" action="" novalidate>
+        ${renderField({
+          id: 'donorName',
+          label: 'Name',
+          error: errors.donorName,
+          control: html`<input id="donorName" name="donorName" value="${model.values.donorName}"${errorAttributes('donorName', errors.donorName)}>`,
+        })}
+        ${renderField({
+          id: 'amount',
+          label: 'Amount',
+          error: errors.amount,
+          control: html`<div class="amount-input">
+            <span class="currency" aria-hidden="true">${model.currency}</span>
+            <input id="amount" name="amount" inputmode="decimal" value="${model.values.amount}"${errorAttributes('amount', errors.amount)}>
+          </div>`,
+        })}
+        ${renderField({
+          id: 'message',
+          label: 'Message',
+          optional: true,
+          error: errors.message,
+          control: html`<textarea id="message" name="message"${errorAttributes('message', errors.message)}>${model.values.message}</textarea>`,
+        })}
+        <button type="submit">Send test alert</button>
+      </form>
+    `,
+  );
+}

@@ -4,6 +4,8 @@
  *   GET  /overlay/:token                      the page
  *   GET  /overlay/:token/events               Server-Sent Events stream of alerts
  *   POST /overlay/:token/alerts/:id/shown     the overlay finished showing an alert
+ *   GET  /overlay/:token/test                 form for sending a test alert
+ *   POST /overlay/:token/test                 send a test alert to connected overlays
  *
  * The token in the path is the only credential: OBS cannot send headers or log
  * in, so the URL itself is the secret. A wrong token answers 404 so the overlay's
@@ -12,12 +14,15 @@
  * Server-Sent Events rather than WebSockets: delivery is one-way, EventSource
  * reconnects by itself, and it passes through tunnels and proxies as plain HTTP.
  */
-import { timingSafeEqual } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { toOverlayAlert, type AlertHub, type OverlayAlert } from '../alerts/alert-hub.ts';
 import type { Config } from '../config.ts';
+import { validateDonationForm, type DonationFormValues } from '../donations/donation-form.ts';
 import type { DonationRepository } from '../donations/donation-repository.ts';
+import { formatMoneyForDisplay } from '../money.ts';
 import { html } from '../web/html.ts';
+import { renderTestAlertPage } from '../web/pages.ts';
 import { sendHtml } from './donation-routes.ts';
 
 /** Pending alerts older than this are not replayed, so a long-closed OBS does not flood the stream. */
@@ -93,6 +98,55 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
     return reply.code(204).send();
   });
 
+  const defaultTestValues: DonationFormValues = {
+    donorName: 'Test donor',
+    amount: '5',
+    message: 'This is a test alert. Nothing was charged.',
+  };
+
+  app.get<{ Params: TokenParams; Querystring: { sent?: string } }>('/overlay/:token/test', async (request, reply) => {
+    const sentTo = Number(request.query.sent);
+    const notice = Number.isInteger(sentTo) && sentTo >= 0 ? describeDelivery(sentTo) : undefined;
+    return sendHtml(
+      reply,
+      200,
+      renderTestAlertPage({
+        currency: config.donation.currency,
+        values: defaultTestValues,
+        ...(notice !== undefined && { notice }),
+      }),
+    );
+  });
+
+  app.post<{ Params: TokenParams }>('/overlay/:token/test', async (request, reply) => {
+    // Same normalisation and length limits as a real donation, so the test shows
+    // exactly what a donor could put on screen. The amount range is not enforced:
+    // a test may want to preview an amount outside the configured limits.
+    const result = validateDonationForm(request.body, {
+      currency: config.donation.currency,
+      fractionDigits: config.donation.fractionDigits,
+      minAmountMinor: 1,
+      maxAmountMinor: Number.MAX_SAFE_INTEGER,
+    });
+    if (!result.ok) {
+      return sendHtml(
+        reply,
+        400,
+        renderTestAlertPage({ currency: config.donation.currency, values: result.values, errors: result.errors }),
+      );
+    }
+    // Never stored, so the "test-" id makes the overlay's acknowledgement a no-op.
+    alertHub.publish({
+      id: `test-${randomUUID()}`,
+      donorName: result.donation.donorName,
+      message: result.donation.message,
+      amount: formatMoneyForDisplay(result.donation.amountMinor, config.donation.currency),
+    });
+    request.log.info({ overlays: alertHub.subscriberCount }, 'Test alert sent');
+    // Post/redirect/get, so refreshing the result does not send another alert.
+    return reply.redirect(`test?sent=${alertHub.subscriberCount}`, 303);
+  });
+
   function streamAlerts(request: FastifyRequest, reply: FastifyReply): void {
     // Fastify's reply lifecycle ends at send(); an event stream stays open, so the
     // raw response is taken over. Hooks such as the security headers do not run
@@ -131,4 +185,11 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
       request.log.info({ subscribers: alertHub.subscriberCount }, 'Overlay disconnected');
     });
   }
+}
+
+function describeDelivery(overlayCount: number): string {
+  if (overlayCount === 0) {
+    return 'No overlay is connected, so nobody saw it. Check that the Browser Source in OBS uses this same URL without /test, and that it is visible in the current scene.';
+  }
+  return `Sent to ${overlayCount} overlay${overlayCount === 1 ? '' : 's'}.`;
 }

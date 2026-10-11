@@ -1,6 +1,6 @@
 import { request as httpRequest, type IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { createAlertHub, type AlertHub } from '../src/alerts/alert-hub.ts';
 import { buildApp } from '../src/app.ts';
@@ -188,6 +188,86 @@ describe('overlay routes', () => {
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
       expect(alertHub.subscriberCount).toBe(0);
+    });
+  });
+
+  describe('test alerts', () => {
+    function postTest(fields: Record<string, string>, tokenInPath = token) {
+      return app.inject({
+        method: 'POST',
+        url: `/overlay/${tokenInPath}/test`,
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        payload: new URLSearchParams(fields).toString(),
+      });
+    }
+
+    it('renders the form prefilled with defaults', async () => {
+      const response = await app.inject({ method: 'GET', url: `/overlay/${token}/test` });
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toContain('value="Test donor"');
+      expect(response.body).toContain('Send test alert');
+      expect(response.headers['content-security-policy']).toContain("script-src 'none'");
+    });
+
+    it('publishes to connected overlays without storing anything, then redirects with the count', async () => {
+      const received: unknown[] = [];
+      alertHub.subscribe((alert) => received.push(alert));
+      alertHub.subscribe(() => {});
+
+      const response = await postTest({ donorName: '  Tester  ', amount: '12.5', message: 'line\nbreak' });
+
+      expect(response.statusCode).toBe(303);
+      expect(response.headers.location).toBe('test?sent=2');
+      expect(received).toEqual([
+        { id: expect.stringMatching(/^test-[0-9a-f-]{36}$/), donorName: 'Tester', message: 'line break', amount: '$12.50' },
+      ]);
+      expect(donations.listPendingAlerts('1970-01-01T00:00:00.000Z')).toEqual([]);
+    });
+
+    it('allows amounts outside the donation limits', async () => {
+      const received: unknown[] = [];
+      alertHub.subscribe((alert) => received.push(alert));
+      expect((await postTest({ donorName: 'Big', amount: '50000' })).statusCode).toBe(303);
+      expect(received).toMatchObject([{ amount: '$50,000.00' }]);
+    });
+
+    it('re-renders with errors for an invalid amount and publishes nothing', async () => {
+      const listener = vi.fn();
+      alertHub.subscribe(listener);
+      const response = await postTest({ donorName: 'X', amount: 'lots' });
+      expect(response.statusCode).toBe(400);
+      expect(response.body).toContain('aria-invalid="true"');
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['0', 'No overlay is connected'],
+      ['1', 'Sent to 1 overlay.'],
+      ['3', 'Sent to 3 overlays.'],
+    ])('reports delivery to %s overlays', async (sent, text) => {
+      const response = await app.inject({ method: 'GET', url: `/overlay/${token}/test?sent=${sent}` });
+      expect(response.body).toContain(text);
+    });
+
+    it('ignores a malformed sent count', async () => {
+      const response = await app.inject({ method: 'GET', url: `/overlay/${token}/test?sent=abc` });
+      expect(response.body).not.toContain('role="status"');
+    });
+
+    it('refuses a wrong token for both the form and the send', async () => {
+      const listener = vi.fn();
+      alertHub.subscribe(listener);
+      expect((await app.inject({ method: 'GET', url: '/overlay/wrong-token-wrong-token-wrong/test' })).statusCode).toBe(404);
+      expect((await postTest({ donorName: 'X', amount: '5' }, 'wrong-token-wrong-token-wrong')).statusCode).toBe(404);
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('acknowledging a test alert is a harmless no-op', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/overlay/${token}/alerts/test-00000000-0000-0000-0000-000000000000/shown`,
+      });
+      expect(response.statusCode).toBe(204);
     });
   });
 
