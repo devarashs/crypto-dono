@@ -92,6 +92,9 @@ export const migrations: readonly Migration[] = [
       ALTER TABLE donations ADD COLUMN donor_name_key TEXT NOT NULL DEFAULT '';
       CREATE INDEX donations_leaderboard ON donations (donor_name_key)
         WHERE show_on_leaderboard = 1 AND alert_triggered_at IS NOT NULL;
+      -- "Recent" reads newest-first; without this it sorts every donation per view.
+      CREATE INDEX donations_recent ON donations (alert_triggered_at)
+        WHERE show_on_leaderboard = 1 AND alert_triggered_at IS NOT NULL;
     `,
     backfill: (database) => {
       const rows = database.prepare('SELECT id, donor_name FROM donations').all() as {
