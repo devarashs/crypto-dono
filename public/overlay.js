@@ -61,13 +61,15 @@ async function showAlert(alert) {
   card.classList.add('is-visible');
   const shownAt = performance.now();
   playAlertSound();
-  if (speechEnabled) {
+  // The server decides per alert (e.g. below TTS_MIN_AMOUNT it is not spoken).
+  const spoken = speechEnabled && alert.speak === true;
+  if (spoken) {
     await wait(speechDelayMs);
     await speak(alert.id);
   }
   // At least the configured duration, longer if the speech ran past it.
   const elapsedMs = performance.now() - shownAt;
-  const visibleMs = Math.max(alertDurationMs, speechEnabled ? elapsedMs + holdAfterSpeechMs : 0);
+  const visibleMs = Math.max(alertDurationMs, spoken ? elapsedMs + holdAfterSpeechMs : 0);
   await wait(visibleMs - elapsedMs);
   card.classList.remove('is-visible');
   await wait(exitDurationMs);

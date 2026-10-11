@@ -11,6 +11,7 @@ const usdRules: DonationFormRules = {
   fractionDigits: 2,
   minAmountMinor: 100,
   maxAmountMinor: 100000,
+  messageMaxLength: 300,
 };
 
 function validate(body: unknown, rules = usdRules) {
@@ -54,7 +55,7 @@ describe('validateDonationForm', () => {
   it('asks for a whole number in a zero-decimal currency', () => {
     const result = validate(
       { amount: '5.5' },
-      { currency: 'jpy', fractionDigits: 0, minAmountMinor: 100, maxAmountMinor: 100000 },
+      { currency: 'jpy', fractionDigits: 0, minAmountMinor: 100, maxAmountMinor: 100000, messageMaxLength: 300 },
     );
     expect(result.ok === false && result.errors.amount).toBe('Enter a whole number.');
   });
@@ -64,6 +65,13 @@ describe('validateDonationForm', () => {
     expect(validate({ amount: '5', donorName: '😀'.repeat(33) }).ok).toBe(false);
     expect(validate({ amount: '5', message: 'é'.repeat(300) }).ok).toBe(true);
     expect(validate({ amount: '5', message: 'é'.repeat(301) }).ok).toBe(false);
+  });
+
+  it('uses the configured message length', () => {
+    const rules = { ...usdRules, messageMaxLength: 20 };
+    expect(validate({ amount: '5', message: 'x'.repeat(20) }, rules).ok).toBe(true);
+    const tooLong = validate({ amount: '5', message: 'x'.repeat(21) }, rules);
+    expect(tooLong.ok === false && tooLong.errors.message).toBe('Keep your message to 20 characters or fewer.');
   });
 
   it('measures length after normalisation, so padding does not count', () => {

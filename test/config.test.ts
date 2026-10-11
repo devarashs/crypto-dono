@@ -43,6 +43,7 @@ describe('loadConfig', () => {
         sound: { kind: 'chime' },
         imageFileName: null,
       },
+      filters: { messageMaxLength: 300, bannedWords: [], messageMinAmountMinor: 0, speechMinAmountMinor: 0 },
       tts: null,
       donation: { currency: 'usd', fractionDigits: 2, minAmountMinor: 100, maxAmountMinor: 100000 },
     });
@@ -243,6 +244,36 @@ describe('loadConfig', () => {
       expect(
         configErrorFor({ ...minimalEnvironment, DONATION_MIN_AMOUNT: 'x', DONATION_MAX_AMOUNT: 'y' }).issues,
       ).toHaveLength(2);
+    });
+  });
+
+  describe('message filters', () => {
+    it('splits BANNED_WORDS on commas, trimming and dropping empties', () => {
+      expect(
+        loadConfig({ ...minimalEnvironment, BANNED_WORDS: ' darn, heck no ,, ,fudge ' }).filters.bannedWords,
+      ).toEqual(['darn', 'heck no', 'fudge']);
+    });
+
+    it('converts the minimum amounts with the currency decimals', () => {
+      expect(
+        loadConfig({ ...minimalEnvironment, MESSAGE_MIN_AMOUNT: '2.50', TTS_MIN_AMOUNT: '10' }).filters,
+      ).toMatchObject({ messageMinAmountMinor: 250, speechMinAmountMinor: 1000 });
+    });
+
+    it.each([
+      ['MESSAGE_MIN_AMOUNT', 'abc'],
+      ['TTS_MIN_AMOUNT', '-1'],
+      ['TTS_MIN_AMOUNT', '1.234'],
+    ])('rejects %s=%s', (variable, value) => {
+      expect(configErrorFor({ ...minimalEnvironment, [variable]: value }).issues).toEqual([
+        expect.stringMatching(new RegExp(`^${variable}: `)),
+      ]);
+    });
+
+    it.each(['9', '501', 'long'])('rejects MESSAGE_MAX_LENGTH=%s', (value) => {
+      expect(configErrorFor({ ...minimalEnvironment, MESSAGE_MAX_LENGTH: value }).issues[0]).toMatch(
+        /^MESSAGE_MAX_LENGTH: /,
+      );
     });
   });
 
