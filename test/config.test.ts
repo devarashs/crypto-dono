@@ -47,6 +47,25 @@ describe('loadConfig', () => {
       leaderboardEnabled: true,
       adminPassword: null,
       filters: { messageMaxLength: 300, bannedWords: [], messageMinAmountMinor: 0, speechMinAmountMinor: 0 },
+      events: {
+        enabled: new Set(['follow', 'sub', 'gift', 'cheer', 'raid']),
+        durationMs: 6000,
+        templates: {
+          follow: '{name} just followed',
+          sub: '{name} subscribed',
+          resub: '{name} resubscribed for {months} months',
+          gift: '{name} gifted {count} {subs}',
+          cheer: '{name} cheered {bits} bits',
+          raid: '{name} is raiding with {viewers} viewers',
+        },
+        sounds: {
+          follow: { kind: 'chime' },
+          sub: { kind: 'chime' },
+          gift: { kind: 'chime' },
+          cheer: { kind: 'chime' },
+          raid: { kind: 'chime' },
+        },
+      },
       tts: null,
       donation: {
         currency: 'usd',
@@ -313,6 +332,43 @@ describe('loadConfig', () => {
     ['on', true],
   ])('reads LEADERBOARD=%s', (value, enabled) => {
     expect(loadConfig({ ...minimalEnvironment, LEADERBOARD: value }).leaderboardEnabled).toBe(enabled);
+  });
+
+  describe('event alerts', () => {
+    it('switches kinds on and off with EVENT_ALERTS', () => {
+      expect([...loadConfig({ ...minimalEnvironment, EVENT_ALERTS: ' Sub , raid ' }).events.enabled]).toEqual(['sub', 'raid']);
+      expect(loadConfig({ ...minimalEnvironment, EVENT_ALERTS: 'none' }).events.enabled.size).toBe(0);
+    });
+
+    it('rejects an unknown kind, naming the valid ones', () => {
+      expect(configErrorFor({ ...minimalEnvironment, EVENT_ALERTS: 'follow,donation' }).issues).toEqual([
+        'EVENT_ALERTS: unknown kind "donation". Use follow, sub, gift, cheer, raid, or none',
+      ]);
+    });
+
+    it('reads custom wording and duration', () => {
+      const events = loadConfig({
+        ...minimalEnvironment,
+        EVENT_TEMPLATE_FOLLOW: ' Welcome, {name}! ',
+        EVENT_DURATION_SECONDS: '4',
+      }).events;
+      expect(events.templates.follow).toBe('Welcome, {name}!');
+      expect(events.templates.raid).toBe('{name} is raiding with {viewers} viewers');
+      expect(events.durationMs).toBe(4000);
+    });
+
+    it('reads per-kind sounds, checking files like ALERT_SOUND', () => {
+      const existing = new Set([resolve('custom', 'raid.mp3')]);
+      const events = loadConfig(
+        { ...minimalEnvironment, EVENT_SOUND_RAID: 'raid.mp3', EVENT_SOUND_FOLLOW: 'none' },
+        (path) => existing.has(path),
+      ).events;
+      expect(events.sounds.raid).toEqual({ kind: 'file', fileName: 'raid.mp3' });
+      expect(events.sounds.follow).toEqual({ kind: 'none' });
+      expect(configErrorFor({ ...minimalEnvironment, EVENT_SOUND_SUB: 'missing.mp3' }).issues[0]).toMatch(
+        /^EVENT_SOUND_SUB: no file named "missing.mp3"/,
+      );
+    });
   });
 
   describe('SOCIAL_LINKS', () => {

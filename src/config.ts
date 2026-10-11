@@ -9,6 +9,12 @@ import { statSync } from 'node:fs';
 import { extname, resolve } from 'node:path';
 import { z } from 'zod';
 import { alertThresholdStatuses, type AlertThresholdStatus } from './donations/payment-status.ts';
+import {
+  defaultEventTemplates,
+  switchableEventKinds,
+  type StreamEventKind,
+  type SwitchableEventKind,
+} from './events/stream-event.ts';
 import { currencyFractionDigits, parseAmountToMinorUnits } from './money.ts';
 import { socialIcons } from './web/social-icons.ts';
 import { nowPaymentsBaseUrls } from './nowpayments/nowpayments-client.ts';
@@ -31,6 +37,14 @@ export class ConfigError extends Error {
  * report as missing instead of as invalid.
  */
 const emptyAsUnset = (value: unknown) => (value === '' ? undefined : value);
+
+function eventTemplate(kind: StreamEventKind) {
+  return z.preprocess(emptyAsUnset, z.string().trim().min(1).max(120).default(defaultEventTemplates[kind]));
+}
+
+function optionalText() {
+  return z.preprocess(emptyAsUnset, z.string().trim().optional());
+}
 
 const isKnownCurrency = (code: string) => {
   try {
@@ -112,6 +126,25 @@ const environmentSchema = z.object({
   ALERT_SOUND: z.preprocess(emptyAsUnset, z.string().trim().optional()),
   // Empty: no image. Otherwise a file name in CUSTOM_ASSETS_DIR.
   ALERT_IMAGE: z.preprocess(emptyAsUnset, z.string().trim().optional()),
+
+  // Platform event alerts (follows, subs, ...). Which kinds alert at all:
+  EVENT_ALERTS: z.preprocess(emptyAsUnset, z.string().default(switchableEventKinds.join(','))),
+  EVENT_DURATION_SECONDS: z.preprocess(emptyAsUnset, z.coerce.number().int().min(2).max(60).default(6)),
+  // Optional wording per kind; {name}, {months}, {count}, {subs}, {bits},
+  // {viewers} are filled in. Defaults in events/stream-event.ts.
+  EVENT_TEMPLATE_FOLLOW: eventTemplate('follow'),
+  EVENT_TEMPLATE_SUB: eventTemplate('sub'),
+  EVENT_TEMPLATE_RESUB: eventTemplate('resub'),
+  EVENT_TEMPLATE_GIFT: eventTemplate('gift'),
+  EVENT_TEMPLATE_CHEER: eventTemplate('cheer'),
+  EVENT_TEMPLATE_RAID: eventTemplate('raid'),
+  // Optional sound per kind: empty for the kind's built-in tone, "none", or a
+  // file in CUSTOM_ASSETS_DIR. Resubs use EVENT_SOUND_SUB.
+  EVENT_SOUND_FOLLOW: optionalText(),
+  EVENT_SOUND_SUB: optionalText(),
+  EVENT_SOUND_GIFT: optionalText(),
+  EVENT_SOUND_CHEER: optionalText(),
+  EVENT_SOUND_RAID: optionalText(),
 
   // Address of a Piper text-to-speech server. Unset means alerts are not spoken.
   TTS_URL: z.preprocess(
@@ -218,6 +251,14 @@ export type Config = {
     /** Below this, alerts are not read aloud. */
     readonly speechMinAmountMinor: number;
   };
+  readonly events: {
+    /** Kinds that alert; a kind not listed is ignored when it arrives. */
+    readonly enabled: ReadonlySet<SwitchableEventKind>;
+    readonly durationMs: number;
+    readonly templates: Readonly<Record<StreamEventKind, string>>;
+    /** "chime" here means the kind's own built-in tone. */
+    readonly sounds: Readonly<Record<SwitchableEventKind, AlertSound>>;
+  };
   /** Text-to-speech, or `null` when TTS_URL is not set. */
   readonly tts: {
     /** Piper server origin without a trailing slash. */
@@ -313,6 +354,36 @@ export function loadConfig(
   }
   if (variables.ALERT_IMAGE !== undefined) checkAsset('ALERT_IMAGE', variables.ALERT_IMAGE, imageExtensions);
 
+  const readSound = (variableName: string, value: string | undefined): AlertSound => {
+    if (value === undefined) return { kind: 'chime' };
+    if (value.toLowerCase() === 'none') return { kind: 'none' };
+    checkAsset(variableName, value, soundExtensions);
+    return { kind: 'file', fileName: value };
+  };
+  const eventSounds: Record<SwitchableEventKind, AlertSound> = {
+    follow: readSound('EVENT_SOUND_FOLLOW', variables.EVENT_SOUND_FOLLOW),
+    sub: readSound('EVENT_SOUND_SUB', variables.EVENT_SOUND_SUB),
+    gift: readSound('EVENT_SOUND_GIFT', variables.EVENT_SOUND_GIFT),
+    cheer: readSound('EVENT_SOUND_CHEER', variables.EVENT_SOUND_CHEER),
+    raid: readSound('EVENT_SOUND_RAID', variables.EVENT_SOUND_RAID),
+  };
+  const eventTemplates: Record<StreamEventKind, string> = {
+    follow: variables.EVENT_TEMPLATE_FOLLOW,
+    sub: variables.EVENT_TEMPLATE_SUB,
+    resub: variables.EVENT_TEMPLATE_RESUB,
+    gift: variables.EVENT_TEMPLATE_GIFT,
+    cheer: variables.EVENT_TEMPLATE_CHEER,
+    raid: variables.EVENT_TEMPLATE_RAID,
+  };
+  const enabledEvents = new Set<SwitchableEventKind>();
+  const eventList = variables.EVENT_ALERTS.trim().toLowerCase();
+  if (eventList !== 'none') {
+    for (const entry of eventList.split(',').map((item) => item.trim()).filter((item) => item !== '')) {
+      if ((switchableEventKinds as readonly string[]).includes(entry)) enabledEvents.add(entry as SwitchableEventKind);
+      else secondPassIssues.push(`EVENT_ALERTS: unknown kind "${entry}". Use ${switchableEventKinds.join(', ')}, or none`);
+    }
+  }
+
   if (
     secondPassIssues.length > 0 ||
     minAmountMinor === undefined ||
@@ -353,6 +424,12 @@ export function loadConfig(
       bannedWords: variables.BANNED_WORDS,
       messageMinAmountMinor,
       speechMinAmountMinor,
+    },
+    events: {
+      enabled: enabledEvents,
+      durationMs: variables.EVENT_DURATION_SECONDS * 1000,
+      templates: eventTemplates,
+      sounds: eventSounds,
     },
     tts: variables.TTS_URL === undefined ? null : { url: variables.TTS_URL, template: variables.TTS_TEMPLATE },
     donation: {
