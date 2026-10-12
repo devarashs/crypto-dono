@@ -31,7 +31,7 @@ const entrySchema = z
   .object({
     id: z
       .string()
-      .regex(/^[a-z0-9][a-z0-9-]{0,31}$/, 'id must be 1 to 32 lower-case letters, digits or dashes'),
+      .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/, 'id must be 1 to 64 letters, digits, dashes or underscores'),
     name: z.string().trim().min(1, 'name must not be empty').max(40, 'name must be at most 40 characters'),
     price: z.union([z.string(), z.number()]),
     file: z.string(),
