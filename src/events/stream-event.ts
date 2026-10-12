@@ -34,7 +34,7 @@ export type StreamEvent = {
   readonly kind: StreamEventKind;
   /** Who did it: the follower, subscriber, gifter, cheerer or raiding channel. */
   readonly actorName: string;
-  /** Resub: cumulative months subscribed. */
+  /** Resub: cumulative months subscribed, when the platform says so reliably. */
   readonly months?: number;
   /** Gift: how many subs were gifted in this one gift. */
   readonly count?: number;

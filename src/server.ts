@@ -15,6 +15,8 @@ import { createLeaderboardQueries } from './donations/leaderboard.ts';
 import { createConnectionStore } from './platforms/connection-store.ts';
 import { createTwitchApi } from './twitch/twitch-api.ts';
 import { createKickApi } from './kick/kick-api.ts';
+import { createSubscriptionHealth } from './platforms/subscription-health.ts';
+import { twitchWebhookPath } from './routes/twitch-webhook-routes.ts';
 import { createKickPublicKeySource } from './kick/kick-public-key.ts';
 import { createNowPaymentsClient } from './nowpayments/nowpayments-client.ts';
 
@@ -51,23 +53,28 @@ const config = loadConfigOrExit();
 // Opened, and migrated, before listening: a schema problem should stop the boot,
 // not surface as a failed donation.
 const database = openDatabaseOrExit(config.databasePath);
+const connections = createConnectionStore(database);
+const twitchApi =
+  config.twitch === null ? undefined : createTwitchApi({ clientId: config.twitch.clientId, clientSecret: config.twitch.clientSecret });
+const kickApi = config.kick === null ? undefined : createKickApi({ clientId: config.kick.clientId, clientSecret: config.kick.clientSecret });
+const subscriptionHealth = createSubscriptionHealth({
+  connections,
+  ...(twitchApi !== undefined && { twitch: { api: twitchApi, callbackUrl: `${config.publicBaseUrl}${twitchWebhookPath}` } }),
+  ...(kickApi !== undefined && { kick: { api: kickApi } }),
+});
 const app = buildApp(config, {
   donations: createDonationRepository(database),
   leaderboard: createLeaderboardQueries(database),
-  connections: createConnectionStore(database),
+  connections,
+  subscriptionHealth,
   // The EventSub signing secret lives next to the database, like the session key.
-  ...(config.twitch !== null && {
+  ...(twitchApi !== undefined && {
     twitch: {
-      api: createTwitchApi({ clientId: config.twitch.clientId, clientSecret: config.twitch.clientSecret }),
+      api: twitchApi,
       eventSubSecret: loadOrCreateSessionSecret(join(dirname(config.databasePath), 'twitch-eventsub-secret')),
     },
   }),
-  ...(config.kick !== null && {
-    kick: {
-      api: createKickApi({ clientId: config.kick.clientId, clientSecret: config.kick.clientSecret }),
-      publicKey: createKickPublicKeySource(),
-    },
-  }),
+  ...(kickApi !== undefined && { kick: { api: kickApi, publicKey: createKickPublicKeySource() } }),
   nowPayments: createNowPaymentsClient({
     apiKey: config.nowPayments.apiKey,
     baseUrl: config.nowPayments.baseUrl,
@@ -115,3 +122,20 @@ if (config.soundboardIssues.length > 0) {
 } else {
   app.log.info(`Soundboard: ${config.soundboard === null ? `off (no ${soundboardFileName})` : `${config.soundboard.length} sounds at /sounds`}`);
 }
+
+/**
+ * Checks Twitch and Kick still hold their alert subscriptions: shortly after
+ * start (once the server answers Twitch's challenges), then daily. Findings
+ * show on the admin page; see platforms/subscription-health.ts.
+ */
+const healthCheckDelayMs = 60_000;
+const healthCheckIntervalMs = 24 * 60 * 60 * 1000;
+async function checkSubscriptions(): Promise<void> {
+  const results = await subscriptionHealth.check();
+  for (const [platform, problem] of Object.entries(results)) {
+    if (problem === null) app.log.info(`${platform} subscriptions: all in place`);
+    else app.log.warn(`${platform} subscriptions: ${problem}. Reconnect it from /admin.`);
+  }
+}
+setTimeout(() => void checkSubscriptions(), healthCheckDelayMs).unref();
+setInterval(() => void checkSubscriptions(), healthCheckIntervalMs).unref();

@@ -46,7 +46,8 @@ export type AdminDashboardModel = {
 export type PlatformStatus =
   | { readonly state: 'not-configured' }
   | { readonly state: 'disconnected' }
-  | { readonly state: 'connected'; readonly login: string }
+  /** `problem`: what the last daily check found missing; alerts still flow for the rest. */
+  | { readonly state: 'connected'; readonly login: string; readonly problem?: string }
   | { readonly state: 'revoked'; readonly login: string; readonly reason: string };
 
 type PlatformSection = {
@@ -75,6 +76,10 @@ function renderPlatformStatus(platform: PlatformSection, status: PlatformStatus)
         <p><a class="button button--small" href="/admin/${platform.path}/connect">Connect ${platform.name}</a></p>`;
     case 'connected':
       return html`<p>Connected as <strong>${status.login}</strong>.</p>
+        ${status.problem !== undefined &&
+        html`<p class="field__error">The daily check found some ${platform.name} alerts are no longer set up
+            (${status.problem}). Reconnect to fix it.</p>
+          <p><a class="button button--small" href="/admin/${platform.path}/connect">Reconnect ${platform.name}</a></p>`}
         <form method="post" action="/admin/${platform.path}/disconnect">
           <button class="button button--ghost button--small" type="submit">Disconnect</button>
         </form>`;

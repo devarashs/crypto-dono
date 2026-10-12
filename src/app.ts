@@ -22,6 +22,7 @@ import type { ConnectionStore } from './platforms/connection-store.ts';
 import { registerTwitchWebhookRoutes, twitchWebhookPath } from './routes/twitch-webhook-routes.ts';
 import type { TwitchApi } from './twitch/twitch-api.ts';
 import type { KickApi } from './kick/kick-api.ts';
+import type { SubscriptionHealth } from './platforms/subscription-health.ts';
 import type { KickPublicKeySource } from './kick/kick-public-key.ts';
 import { registerKickWebhookRoutes } from './routes/kick-webhook-routes.ts';
 import type { NowPaymentsClient } from './nowpayments/nowpayments-client.ts';
@@ -43,6 +44,8 @@ export type AppDependencies = {
   readonly connections: ConnectionStore;
   /** Present when Twitch is configured: its API client and the EventSub signing secret. */
   readonly twitch?: { readonly api: TwitchApi; readonly eventSubSecret: string };
+  /** Whether Twitch and Kick still hold their subscriptions, for the admin page. */
+  readonly subscriptionHealth?: Pick<SubscriptionHealth, 'finding' | 'clear'>;
   /** Present when Kick is configured: its API client and where its signing key comes from. */
   readonly kick?: { readonly api: KickApi; readonly publicKey: KickPublicKeySource };
   readonly nowPayments: NowPaymentsClient;
@@ -233,6 +236,7 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
           twitch: { ...twitch, callbackUrl: `${config.publicBaseUrl}${twitchWebhookPath}` },
         }),
         ...(kick !== undefined && { kick: { api: kick.api } }),
+        ...(dependencies.subscriptionHealth !== undefined && { subscriptionHealth: dependencies.subscriptionHealth }),
       });
     });
   }
