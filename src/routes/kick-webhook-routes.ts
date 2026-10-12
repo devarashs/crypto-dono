@@ -25,6 +25,15 @@ export type KickWebhookDependencies = {
   readonly now?: () => number;
 };
 
+/**
+ * A renewal's "duration", logged so it can be compared with the viewer's badge
+ * on Kick and settle whether it counts total months (ROADMAP item 28).
+ */
+function renewalDuration(eventType: string, payload: unknown): { duration?: unknown } {
+  if (eventType !== 'channel.subscription.renewal' || typeof payload !== 'object' || payload === null) return {};
+  return { duration: (payload as Record<string, unknown>).duration };
+}
+
 export function registerKickWebhookRoutes(app: FastifyInstance, dependencies: KickWebhookDependencies): void {
   const { connections, publicKey, publishEvent } = dependencies;
   const now = dependencies.now ?? Date.now;
@@ -77,12 +86,16 @@ export function registerKickWebhookRoutes(app: FastifyInstance, dependencies: Ki
     }
 
     try {
-      const translation = translateKickEvent(eventType, JSON.parse(rawBody), connection.accountId);
+      const payload: unknown = JSON.parse(rawBody);
+      const translation = translateKickEvent(eventType, payload, connection.accountId);
       if (translation.outcome === 'ignored') {
         request.log.info({ ...logContext, reason: translation.reason }, 'Ignored a Kick event');
       } else {
         const published = publishEvent(translation.event, `kick-${messageId}`);
-        request.log.info({ ...logContext, kind: translation.event.kind, published }, 'Kick event received');
+        request.log.info(
+          { ...logContext, kind: translation.event.kind, published, ...renewalDuration(eventType, payload) },
+          'Kick event received',
+        );
       }
     } catch (error) {
       // Retrying a malformed event would not fix it; log it and acknowledge.

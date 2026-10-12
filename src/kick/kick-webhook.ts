@@ -99,12 +99,10 @@ export function translateKickEvent(eventType: string, payload: unknown, broadcas
     case 'channel.subscription.renewal': {
       const data = eventSchemas[eventType].parse(payload);
       if (isOtherChannel(data)) return forOtherChannel;
-      // Assumed to be the months subscribed so far; to be confirmed against a
-      // real renewal (see ROADMAP item 28).
-      return {
-        outcome: 'event',
-        event: { platform, kind: 'resub', actorName: nameOf(data.subscriber), months: data.duration },
-      };
+      // Kick's "duration" may be the months subscribed so far or only the
+      // length of this renewal; until a real renewal settles it, the alert
+      // shows no number (see ROADMAP item 28). The route logs the duration.
+      return { outcome: 'event', event: { platform, kind: 'resub', actorName: nameOf(data.subscriber) } };
     }
     case 'channel.subscription.gifts': {
       const data = eventSchemas[eventType].parse(payload);

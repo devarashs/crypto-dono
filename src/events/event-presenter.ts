@@ -20,6 +20,12 @@ export type EventPresenterSettings = {
 /** Returns the alert, or `null` when the streamer has switched this kind off. */
 export type EventPresenter = (event: StreamEvent, alertId: string) => OverlayAlert | null;
 
+/**
+ * A resub whose platform gave no trustworthy month count (Kick, for now). Fixed
+ * rather than templated: EVENT_TEMPLATE_RESUB is written around {months}.
+ */
+const resubWithoutMonths = '{name} resubscribed';
+
 /** Numbers are highlighted in the headline, like donation amounts. */
 const emphasisedValues = new Set(['months', 'count', 'bits', 'kicks', 'viewers']);
 
@@ -44,7 +50,11 @@ export function createEventPresenter(settings: EventPresenterSettings, bannedWor
     return {
       id: alertId,
       kind: event.kind,
-      headline: renderHeadline(settings.templates[event.kind], values, emphasisedValues),
+      headline: renderHeadline(
+        event.kind === 'resub' && event.months === undefined ? resubWithoutMonths : settings.templates[event.kind],
+        values,
+        emphasisedValues,
+      ),
       donorName: actorName,
       message: event.message === undefined ? '' : bannedWords.mask(event.message),
       amount: '',

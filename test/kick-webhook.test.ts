@@ -55,13 +55,14 @@ describe('translateKickEvent', () => {
     });
   });
 
-  it('translates a new sub and a renewal with its months', () => {
+  it('translates a new sub, and a renewal without a month count until Kick\'s duration is understood', () => {
     const sub = { broadcaster, subscriber: person('sub_guy'), duration: 1, created_at: 'x', expires_at: 'y' };
     expect(translateKickEvent('channel.subscription.new', sub, broadcasterId)).toMatchObject({
       event: { kind: 'sub', actorName: 'sub_guy' },
     });
-    expect(translateKickEvent('channel.subscription.renewal', { ...sub, duration: 6 }, broadcasterId)).toMatchObject({
-      event: { kind: 'resub', actorName: 'sub_guy', months: 6 },
+    expect(translateKickEvent('channel.subscription.renewal', { ...sub, duration: 6 }, broadcasterId)).toEqual({
+      outcome: 'event',
+      event: { platform: 'kick', kind: 'resub', actorName: 'sub_guy' },
     });
   });
 
