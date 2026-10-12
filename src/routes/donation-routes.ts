@@ -68,6 +68,7 @@ export function registerDonationRoutes(app: FastifyInstance, dependencies: Donat
     fractionDigits: config.donation.fractionDigits,
     minAmountMinor: config.donation.minAmountMinor,
     maxAmountMinor: config.donation.maxAmountMinor,
+    soundboardEnabled: config.soundboard !== null,
   };
 
   app.get<{ Querystring: { cancelled?: string } }>('/', async (request, reply) => {

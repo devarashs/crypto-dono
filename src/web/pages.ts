@@ -84,6 +84,8 @@ export type DonationPageModel = {
   readonly leaderboard: LeaderboardModel | null;
   /** The quiet strip of profile links under the page; empty for none. */
   readonly socialLinks: readonly SocialLinkModel[];
+  /** Whether to link to the soundboard. */
+  readonly soundboardEnabled: boolean;
 };
 
 export type { SocialLinkModel } from './social-links.ts';
@@ -148,6 +150,8 @@ export function renderDonationPage(model: DonationPageModel): SafeHtml {
       <button class="button" type="submit">Continue to payment</button>
     </form>
     <p class="footnote">You pick a coin and pay on NOWPayments' checkout.</p>
+    ${model.soundboardEnabled &&
+    html`<p class="footnote"><a class="link" href="/sounds">Or pay to play a sound on stream</a></p>`}
   `;
 
   return layout(

@@ -584,6 +584,81 @@ a.tabs__tab:hover {
   outline-offset: 2px;
 }
 
+/* ── Soundboard ────────────────────────────────────────────────────────── */
+
+.sound-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One sound: the choice (name and price) and its preview player beneath. */
+.sound-option {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-void);
+  transition: border-color var(--motion-fast) var(--ease-out);
+}
+
+.sound-option:hover {
+  border-color: var(--color-accent-soft);
+}
+
+.sound-option:has(.sound-option__input:checked) {
+  border-color: var(--color-accent);
+  background: var(--color-accent-faint);
+  box-shadow: inset 0 0 18px var(--color-accent-faint);
+}
+
+.sound-option:has(.sound-option__input:focus-visible) {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.sound-option__choice {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  cursor: pointer;
+}
+
+/* The whole row is the click target; the radio itself stays for keyboard and
+   screen readers. */
+.sound-option__input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.sound-option__name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sound-option__input:checked ~ .sound-option__name {
+  color: var(--color-accent);
+}
+
+.sound-option__price {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.sound-option__preview {
+  width: 100%;
+  height: 2.25rem;
+  color-scheme: dark;
+}
+
 .amount-custom {
   margin-top: var(--space-2);
 }

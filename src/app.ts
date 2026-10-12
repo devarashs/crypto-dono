@@ -208,7 +208,7 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
   const { soundboard } = config;
   if (soundboard !== null) {
     app.register(async (scope) => {
-      registerSoundboardRoutes(scope, { config: { ...config, soundboard } });
+      registerSoundboardRoutes(scope, { ...dependencies, config: { ...config, soundboard } });
     });
   }
 
