@@ -5,11 +5,11 @@
  *   POST /donate    validate → store → create NOWPayments invoice → 303 to checkout
  *   GET  /thanks    where NOWPayments sends the donor after paying
  */
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createBannedWordFilter } from '../alerts/banned-words.ts';
 import type { Config } from '../config.ts';
 import { validateDonationForm } from '../donations/donation-form.ts';
-import type { DonationRepository } from '../donations/donation-repository.ts';
+import type { Donation, DonationRepository } from '../donations/donation-repository.ts';
 import type { LeaderboardQueries } from '../donations/leaderboard.ts';
 import { formatMinorUnits, formatMoneyForDisplay } from '../money.ts';
 import type { NowPaymentsClient } from '../nowpayments/nowpayments-client.ts';
@@ -32,7 +32,7 @@ const topDonorLimit = 100;
 const recentLimit = 25;
 
 export function registerDonationRoutes(app: FastifyInstance, dependencies: DonationRouteDependencies): void {
-  const { config, donations, leaderboard, nowPayments } = dependencies;
+  const { config, donations, leaderboard } = dependencies;
   const bannedWords = createBannedWordFilter(config.filters.bannedWords);
 
   /**
@@ -107,34 +107,10 @@ export function registerDonationRoutes(app: FastifyInstance, dependencies: Donat
         showOnLeaderboard: config.leaderboardEnabled && result.donation.showOnLeaderboard,
       });
 
-      let invoice;
-      try {
-        invoice = await nowPayments.createInvoice({
-          priceAmount: formatMinorUnits(donation.amountMinor, config.donation.fractionDigits),
-          priceCurrency: donation.currency,
-          orderId: donation.publicId,
-          orderDescription:
-            config.streamerName === '' ? 'Stream donation' : `Donation to ${config.streamerName}`,
-          ipnCallbackUrl: `${config.publicBaseUrl}${nowPaymentsWebhookPath}`,
-          successUrl: `${config.publicBaseUrl}/thanks?donation=${encodeURIComponent(donation.publicId)}`,
-          cancelUrl: `${config.publicBaseUrl}/?cancelled=1`,
-        });
-      } catch (error) {
-        request.log.error({ err: error, donationId: donation.publicId }, 'Creating the NOWPayments invoice failed');
-        return sendHtml(
-          reply,
-          502,
-          renderErrorPage(
-            'Payment is unavailable right now',
-            "We couldn't reach the payment provider, so nothing was charged. Please try again in a minute.",
-          ),
-        );
-      }
-
-      donations.setInvoiceId(donation.publicId, invoice.invoiceId);
-      request.log.info({ donationId: donation.publicId, invoiceId: invoice.invoiceId }, 'Invoice created');
-      // 303 so the browser follows with a GET and a refresh cannot resubmit the form.
-      return reply.redirect(invoice.invoiceUrl, 303);
+      return startCheckout(dependencies, request, reply, donation, {
+        description: config.streamerName === '' ? 'Stream donation' : `Donation to ${config.streamerName}`,
+        cancelPath: '/?cancelled=1',
+      });
     },
   );
 
@@ -147,10 +123,58 @@ export function registerDonationRoutes(app: FastifyInstance, dependencies: Donat
       renderThanksPage(
         donation === undefined
           ? {}
-          : { donorName: donation.donorName, amountMinor: donation.amountMinor, currency: donation.currency },
+          : {
+              donorName: donation.donorName,
+              amountMinor: donation.amountMinor,
+              currency: donation.currency,
+              ...(donation.sound !== null && { soundName: donation.sound.name }),
+            },
       ),
     );
   });
+}
+
+/**
+ * Creates the NOWPayments invoice for a stored donation and sends the donor to
+ * its checkout. Shared by the donation form and the soundboard.
+ *
+ * @param options.cancelPath Where NOWPayments sends the donor back if they cancel.
+ */
+export async function startCheckout(
+  dependencies: Pick<DonationRouteDependencies, 'config' | 'donations' | 'nowPayments'>,
+  request: FastifyRequest,
+  reply: FastifyReply,
+  donation: Donation,
+  options: { readonly description: string; readonly cancelPath: string },
+): Promise<FastifyReply> {
+  const { config, donations, nowPayments } = dependencies;
+  let invoice;
+  try {
+    invoice = await nowPayments.createInvoice({
+      priceAmount: formatMinorUnits(donation.amountMinor, config.donation.fractionDigits),
+      priceCurrency: donation.currency,
+      orderId: donation.publicId,
+      orderDescription: options.description,
+      ipnCallbackUrl: `${config.publicBaseUrl}${nowPaymentsWebhookPath}`,
+      successUrl: `${config.publicBaseUrl}/thanks?donation=${encodeURIComponent(donation.publicId)}`,
+      cancelUrl: `${config.publicBaseUrl}${options.cancelPath}`,
+    });
+  } catch (error) {
+    request.log.error({ err: error, donationId: donation.publicId }, 'Creating the NOWPayments invoice failed');
+    return sendHtml(
+      reply,
+      502,
+      renderErrorPage(
+        'Payment is unavailable right now',
+        "We couldn't reach the payment provider, so nothing was charged. Please try again in a minute.",
+      ),
+    );
+  }
+
+  donations.setInvoiceId(donation.publicId, invoice.invoiceId);
+  request.log.info({ donationId: donation.publicId, invoiceId: invoice.invoiceId }, 'Invoice created');
+  // 303 so the browser follows with a GET and a refresh cannot resubmit the form.
+  return reply.redirect(invoice.invoiceUrl, 303);
 }
 
 export function sendHtml(reply: FastifyReply, statusCode: number, page: SafeHtml): FastifyReply {

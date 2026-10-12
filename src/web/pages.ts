@@ -334,6 +334,8 @@ export type ThanksPageModel = {
   readonly donorName?: string;
   readonly amountMinor?: number;
   readonly currency?: string;
+  /** Set for a soundboard purchase. */
+  readonly soundName?: string;
 };
 
 export function renderThanksPage(model: ThanksPageModel): SafeHtml {
@@ -345,10 +347,14 @@ export function renderThanksPage(model: ThanksPageModel): SafeHtml {
     'Thank you',
     panel(html`
       <h1 class="panel__heading">Thank you${model.donorName !== undefined && html`, ${model.donorName}`}!</h1>
-      <p>${amount !== undefined ? html`Your <strong class="amount">${amount}</strong> donation` : 'Your donation'} will
-        appear on stream once the payment is confirmed on the blockchain. That takes from a few seconds to several
-        minutes, depending on the coin.</p>
-      <p class="panel__footer"><a class="link" href="/">Make another donation</a></p>
+      ${model.soundName !== undefined
+        ? html`<p><strong>${model.soundName}</strong> will play on stream once the payment is confirmed on the
+            blockchain. That takes from a few seconds to several minutes, depending on the coin.</p>
+            <p class="panel__footer"><a class="link" href="/sounds">Play another sound</a></p>`
+        : html`<p>${amount !== undefined ? html`Your <strong class="amount">${amount}</strong> donation` : 'Your donation'} will
+            appear on stream once the payment is confirmed on the blockchain. That takes from a few seconds to several
+            minutes, depending on the coin.</p>
+            <p class="panel__footer"><a class="link" href="/">Make another donation</a></p>`}
     `),
   );
 }
