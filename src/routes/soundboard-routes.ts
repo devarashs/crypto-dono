@@ -15,7 +15,8 @@ import type { DonationRepository } from '../donations/donation-repository.ts';
 import type { NowPaymentsClient } from '../nowpayments/nowpayments-client.ts';
 import { validateSoundForm } from '../soundboard/sound-form.ts';
 import type { Sound } from '../soundboard/soundboard.ts';
-import { renderSoundboardPage } from '../web/soundboard-page.ts';
+import { publicPageWithScriptPolicy } from '../web/content-security-policy.ts';
+import { renderSoundboardPage, soundsByPrice } from '../web/soundboard-page.ts';
 import { sendHtml, startCheckout } from './donation-routes.ts';
 
 export type SoundboardRouteDependencies = {
@@ -30,9 +31,14 @@ export function registerSoundboardRoutes(app: FastifyInstance, dependencies: Sou
   const pageModel = {
     streamerName: config.streamerName,
     currency: config.donation.currency,
-    sounds: config.soundboard,
+    sounds: soundsByPrice(config.soundboard),
     leaderboardEnabled: config.leaderboardEnabled,
   };
+
+  // The page loads its preview script; every other response keeps the strict default.
+  app.addHook('onRequest', async (request, reply) => {
+    if (request.url.split('?')[0] === '/sounds') reply.header('content-security-policy', publicPageWithScriptPolicy);
+  });
 
   app.get<{ Querystring: { cancelled?: string } }>('/sounds', async (request, reply) => {
     const notice =

@@ -199,6 +199,9 @@ on-stream table, respecting the opt-out).
       name and leaderboard choice, pay. The invoice uses the price from the
       list, never from the form. The donation records the sound's id, name and
       price at purchase (migration 7). Linked from the donation page.
+      Revised 2026-10-12 at the streamer's request: a grid of pads, cheapest
+      first, with a small preview button per pad (public/sound-preview.js; the
+      page still works as a plain form without it).
 - [x] 26. On stream: a paid sound shows "{name} played {sound}" and plays that
       file instead of the chime, cut off after 20 seconds. Queued, replayable
       and skippable like any donation, with a test button per sound. Proven with
