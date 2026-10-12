@@ -33,6 +33,12 @@ describe('parseSoundboard', () => {
     expect(parse(many).issues).toEqual([`lists ${maximumSounds + 1} sounds; at most ${maximumSounds}`]);
   });
 
+  it('accepts ids made from file names, with capitals and underscores', () => {
+    const result = parse([{ id: 'nya_2xyALFL', name: 'Nya', price: 1, file: 'nya_2xyALFL.mp3' }]);
+    expect(result.issues).toEqual([]);
+    expect(result.sounds.map((sound) => sound.id)).toEqual(['nya_2xyALFL']);
+  });
+
   it('names every bad entry at once, and keeps the good ones', () => {
     const result = parse([
       { id: 'Air Horn', name: 'Air horn', price: 2, file: 'a.mp3' },
@@ -47,7 +53,7 @@ describe('parseSoundboard', () => {
     ]);
     expect(result.sounds.map((sound) => sound.id)).toEqual(['ok', 'ok']);
     expect(result.issues).toEqual([
-      expect.stringMatching(/^sound 1 \("Air Horn"\): id: id must be 1 to 32 lower-case/),
+      expect.stringMatching(/^sound 1 \("Air Horn"\): id: id must be 1 to 64 letters, digits, dashes or underscores/),
       'sound 3 ("ok"): the id "ok" is used more than once',
       'sound 4 ("cheap"): price must be an amount between DONATION_MIN_AMOUNT and DONATION_MAX_AMOUNT',
       'sound 5 ("pricey"): price must be an amount between DONATION_MIN_AMOUNT and DONATION_MAX_AMOUNT',

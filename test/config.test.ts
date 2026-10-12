@@ -68,6 +68,7 @@ describe('loadConfig', () => {
         },
       },
       soundboard: null,
+      soundboardIssues: [],
       tts: null,
       donation: {
         currency: 'usd',
@@ -530,24 +531,39 @@ describe('loadConfig', () => {
       ]);
     });
 
-    it('refuses to start over a missing, misnamed or non-audio file, naming the sound', () => {
+    it('turns the soundboard off over a missing, misnamed or non-audio file, naming the sound', () => {
       const json = JSON.stringify([
         { id: 'gone', name: 'Gone', price: 2, file: 'gone.mp3' },
         { id: 'escape', name: 'Escape', price: 2, file: '../secret.mp3' },
         { id: 'picture', name: 'Picture', price: 2, file: 'cat.png' },
       ]);
-      expect(issuesFor({ [soundboardPath]: json }, ['cat.png'])).toEqual([
-        `soundboard.json: sound "gone" file: no file named "gone.mp3" in ${resolve('custom')}`,
-        'soundboard.json: sound "escape" file: must be a plain file name inside CUSTOM_ASSETS_DIR, without folders',
-        'soundboard.json: sound "picture" file: must end in one of .mp3, .ogg, .wav, .m4a',
+      const config = load({ [soundboardPath]: json }, ['cat.png']);
+      expect(config.soundboard).toBeNull();
+      expect(config.soundboardIssues).toEqual([
+        `sound "gone" file: no file named "gone.mp3" in ${resolve('custom')}`,
+        'sound "escape" file: must be a plain file name inside CUSTOM_ASSETS_DIR, without folders',
+        'sound "picture" file: must end in one of .mp3, .ogg, .wav, .m4a',
       ]);
     });
 
-    it('reports a broken file alongside other configuration problems', () => {
-      expect(issuesFor({ [soundboardPath]: '[]' }, [], { ALERT_DURATION_SECONDS: '12', SOCIAL_LINKS: 'nope' })).toEqual([
-        expect.stringMatching(/^SOCIAL_LINKS: /),
-        'soundboard.json: lists no sounds; delete the file to turn the soundboard off',
+    it('keeps the rest of the service running when the file is broken', () => {
+      const config = load({ [soundboardPath]: '[]' }, []);
+      expect(config.soundboard).toBeNull();
+      expect(config.soundboardIssues).toEqual(['lists no sounds; delete the file to turn the soundboard off']);
+    });
+
+    it('turns the whole soundboard off over one bad entry, so a problem is noticed', () => {
+      const json = JSON.stringify([
+        { id: 'good', name: 'Good', price: 2, file: 'good.mp3' },
+        { id: 'bad id', name: 'Bad', price: 2, file: 'good.mp3' },
       ]);
+      const config = load({ [soundboardPath]: json }, ['good.mp3']);
+      expect(config.soundboard).toBeNull();
+      expect(config.soundboardIssues).toEqual([expect.stringMatching(/^sound 2 \("bad id"\): id: /)]);
+    });
+
+    it('still stops the service over other configuration problems', () => {
+      expect(issuesFor({}, [], { SOCIAL_LINKS: 'nope' })).toEqual([expect.stringMatching(/^SOCIAL_LINKS: /)]);
     });
   });
 

@@ -281,8 +281,10 @@ export type Config = {
     /** "chime" here means the kind's own built-in tone. */
     readonly sounds: Readonly<Record<SwitchableEventKind, AlertSound>>;
   };
-  /** Sounds viewers can pay to play, or `null` when there is no soundboard file. */
+  /** Sounds viewers can pay to play, or `null` when there is no valid soundboard file. */
   readonly soundboard: readonly Sound[] | null;
+  /** Why soundboard.json was not used; empty when it was fine or absent. */
+  readonly soundboardIssues: readonly string[];
   /** Text-to-speech, or `null` when TTS_URL is not set. */
   readonly tts: {
     /** Piper server origin without a trailing slash. */
@@ -364,13 +366,18 @@ export function loadConfig(
   }
 
   const assetsDirectory = resolve(variables.CUSTOM_ASSETS_DIR);
-  const checkAsset = (variableName: string, fileName: string, allowedExtensions: readonly string[]) => {
+  const checkAsset = (
+    variableName: string,
+    fileName: string,
+    allowedExtensions: readonly string[],
+    issues: string[] = secondPassIssues,
+  ) => {
     if (!assetFileNamePattern.test(fileName)) {
-      secondPassIssues.push(`${variableName}: must be a plain file name inside CUSTOM_ASSETS_DIR, without folders`);
+      issues.push(`${variableName}: must be a plain file name inside CUSTOM_ASSETS_DIR, without folders`);
     } else if (!allowedExtensions.includes(extname(fileName).toLowerCase())) {
-      secondPassIssues.push(`${variableName}: must end in one of ${allowedExtensions.join(', ')}`);
+      issues.push(`${variableName}: must end in one of ${allowedExtensions.join(', ')}`);
     } else if (!fileExists(resolve(assetsDirectory, fileName))) {
-      secondPassIssues.push(`${variableName}: no file named "${fileName}" in ${assetsDirectory}`);
+      issues.push(`${variableName}: no file named "${fileName}" in ${assetsDirectory}`);
     }
   };
   let sound: AlertSound = { kind: 'chime' };
@@ -403,15 +410,19 @@ export function loadConfig(
     cheer: variables.EVENT_TEMPLATE_CHEER,
     raid: variables.EVENT_TEMPLATE_RAID,
   };
+  // A soundboard problem turns the soundboard off rather than stopping the
+  // service: the list is edited often, and a typo in it must not take the
+  // donation page down. The problems are logged at startup instead.
   let soundboard: readonly Sound[] | null = null;
+  const soundboardIssues: string[] = [];
   const soundboardText = readTextFile(resolve(assetsDirectory, soundboardFileName));
   if (soundboardText !== undefined && minAmountMinor !== undefined && maxAmountMinor !== undefined) {
     const parsedSoundboard = parseSoundboard(soundboardText, { fractionDigits, minAmountMinor, maxAmountMinor });
-    for (const issue of parsedSoundboard.issues) secondPassIssues.push(`${soundboardFileName}: ${issue}`);
+    soundboardIssues.push(...parsedSoundboard.issues);
     for (const sound of parsedSoundboard.sounds) {
-      checkAsset(`${soundboardFileName}: sound "${sound.id}" file`, sound.fileName, soundExtensions);
+      checkAsset(`sound "${sound.id}" file`, sound.fileName, soundExtensions, soundboardIssues);
     }
-    soundboard = parsedSoundboard.sounds;
+    if (soundboardIssues.length === 0) soundboard = parsedSoundboard.sounds;
   }
 
   const enabledEvents = new Set<SwitchableEventKind>();
@@ -475,6 +486,7 @@ export function loadConfig(
       sounds: eventSounds,
     },
     soundboard,
+    soundboardIssues,
     tts: variables.TTS_URL === undefined ? null : { url: variables.TTS_URL, template: variables.TTS_TEMPLATE },
     donation: {
       currency: variables.DONATION_CURRENCY,

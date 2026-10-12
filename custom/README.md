@@ -30,8 +30,9 @@ here and list them in `soundboard.json` in this folder:
 ]
 ```
 
-- `id`: lower-case letters, digits and dashes, up to 32. It appears in links
-  and is saved with each purchase, so keep it once people have bought the sound.
+- `id`: letters, digits, dashes and underscores, up to 64, e.g. the file name
+  without its extension. It appears in links and is saved with each purchase, so
+  keep it once people have bought the sound.
 - `name`: what viewers see, up to 40 characters.
 - `price`: in `DONATION_CURRENCY`, between `DONATION_MIN_AMOUNT` and
   `DONATION_MAX_AMOUNT`. Viewers pay exactly this.
@@ -41,4 +42,6 @@ here and list them in `soundboard.json` in this folder:
 
 Listed sound files are public, so viewers can preview them before paying.
 Without `soundboard.json` there is no soundboard. The service checks the file
-at startup and refuses to start if it has a problem, naming the sound.
+at startup: if anything in it is wrong, the soundboard stays off (the rest of
+the site runs as normal) and the log says what to fix, naming the sound. Check
+with `docker compose logs crypto-dono | grep -i soundboard` after a restart.
