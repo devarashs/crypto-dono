@@ -10,12 +10,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import type { StreamEvent } from '../events/stream-event.ts';
 
-/**
- * Messages older than this are refused even with a valid signature, so a
- * captured message cannot be replayed later. Twitch sends within seconds and
- * retries within minutes.
- */
-export const maximumMessageAgeMs = 10 * 60 * 1000;
+export { isFreshMessage, maximumMessageAgeMs } from '../platforms/message-freshness.ts';
 
 export type EventSubHeaders = {
   readonly messageId: string | undefined;
@@ -33,13 +28,6 @@ export function verifyEventSubSignature(headers: EventSubHeaders, rawBody: strin
   );
   const received = Buffer.from(headers.signature);
   return received.length === expected.length && timingSafeEqual(received, expected);
-}
-
-/** True if the message timestamp is recent (and not implausibly in the future). */
-export function isFreshMessage(timestamp: string, now: number): boolean {
-  const sentAt = Date.parse(timestamp);
-  if (Number.isNaN(sentAt)) return false;
-  return now - sentAt <= maximumMessageAgeMs && sentAt - now <= 60_000;
 }
 
 const name = z.string().min(1);

@@ -138,6 +138,7 @@ const environmentSchema = z.object({
   EVENT_TEMPLATE_RESUB: eventTemplate('resub'),
   EVENT_TEMPLATE_GIFT: eventTemplate('gift'),
   EVENT_TEMPLATE_CHEER: eventTemplate('cheer'),
+  EVENT_TEMPLATE_KICKS: eventTemplate('kicks'),
   EVENT_TEMPLATE_RAID: eventTemplate('raid'),
   // Optional sound per kind: empty for the kind's built-in tone, "none", or a
   // file in CUSTOM_ASSETS_DIR. Resubs use EVENT_SOUND_SUB.
@@ -169,6 +170,9 @@ const environmentSchema = z.object({
   // neither, Twitch alerts are simply not offered.
   TWITCH_CLIENT_ID: z.preprocess(emptyAsUnset, z.string().trim().regex(/^[a-z0-9]+$/, 'should be the Client ID from dev.twitch.tv/console').optional()),
   TWITCH_CLIENT_SECRET: z.preprocess(emptyAsUnset, z.string().trim().min(1).optional()),
+  // Kick app credentials, from kick.com/settings/developer. Both or neither.
+  KICK_CLIENT_ID: z.preprocess(emptyAsUnset, z.string().trim().regex(/^[A-Za-z0-9]+$/, 'should be the Client ID from kick.com/settings/developer').optional()),
+  KICK_CLIENT_SECRET: z.preprocess(emptyAsUnset, z.string().trim().min(1).optional()),
   // The public donor leaderboard on the donation page.
   LEADERBOARD: z.preprocess(emptyAsUnset, z.stringbool().default(true)),
 
@@ -261,6 +265,8 @@ export type Config = {
   readonly socialLinks: readonly SocialLink[];
   /** Twitch app credentials, or `null` when Twitch is not configured. */
   readonly twitch: { readonly clientId: string; readonly clientSecret: string } | null;
+  /** Kick app credentials, or `null` when Kick is not configured. */
+  readonly kick: { readonly clientId: string; readonly clientSecret: string } | null;
   /** Whether the donation page shows the public leaderboard. */
   readonly leaderboardEnabled: boolean;
   /** Admin page password, or `null` when the admin page is disabled. */
@@ -357,6 +363,9 @@ export function loadConfig(
   if ((variables.TWITCH_CLIENT_ID === undefined) !== (variables.TWITCH_CLIENT_SECRET === undefined)) {
     secondPassIssues.push('TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET: set both, or neither');
   }
+  if ((variables.KICK_CLIENT_ID === undefined) !== (variables.KICK_CLIENT_SECRET === undefined)) {
+    secondPassIssues.push('KICK_CLIENT_ID and KICK_CLIENT_SECRET: set both, or neither');
+  }
   const messageMinAmountMinor = parseAmountToMinorUnits(variables.MESSAGE_MIN_AMOUNT, fractionDigits);
   const speechMinAmountMinor = parseAmountToMinorUnits(variables.TTS_MIN_AMOUNT, fractionDigits);
   if (messageMinAmountMinor === undefined) secondPassIssues.push(`MESSAGE_MIN_AMOUNT: must be ${amountFormat}`);
@@ -408,6 +417,7 @@ export function loadConfig(
     resub: variables.EVENT_TEMPLATE_RESUB,
     gift: variables.EVENT_TEMPLATE_GIFT,
     cheer: variables.EVENT_TEMPLATE_CHEER,
+    kicks: variables.EVENT_TEMPLATE_KICKS,
     raid: variables.EVENT_TEMPLATE_RAID,
   };
   // A soundboard problem turns the soundboard off rather than stopping the
@@ -470,6 +480,10 @@ export function loadConfig(
     twitch:
       variables.TWITCH_CLIENT_ID !== undefined && variables.TWITCH_CLIENT_SECRET !== undefined
         ? { clientId: variables.TWITCH_CLIENT_ID, clientSecret: variables.TWITCH_CLIENT_SECRET }
+        : null,
+    kick:
+      variables.KICK_CLIENT_ID !== undefined && variables.KICK_CLIENT_SECRET !== undefined
+        ? { clientId: variables.KICK_CLIENT_ID, clientSecret: variables.KICK_CLIENT_SECRET }
         : null,
     leaderboardEnabled: variables.LEADERBOARD,
     adminPassword: variables.ADMIN_PASSWORD ?? null,

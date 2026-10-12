@@ -202,6 +202,22 @@ with the `EVENT_*` settings in `.env.example`. If Twitch stops sending events
 (for example after you change your password), the admin page says so and offers
 **Reconnect Twitch**.
 
+## Kick alerts
+
+Follows, subs, resubs, gift subs and Kicks from Kick show in the same overlay,
+through Kick's webhooks. Kicks use the bits (`cheer`) switch and sound, with their
+own wording in `EVENT_TEMPLATE_KICKS`. Kick's API has no raid event.
+
+1. Create an app at [kick.com/settings/developer](https://kick.com/settings/developer):
+   redirect URL `<PUBLIC_BASE_URL>/admin/kick/callback`; turn on **Enable
+   Webhooks** with the URL `<PUBLIC_BASE_URL>/webhooks/kick`.
+2. Put its Client ID and Client Secret in `KICK_CLIENT_ID` and
+   `KICK_CLIENT_SECRET`, and restart.
+3. Open `/admin` and click **Connect Kick**.
+
+Every message is checked against Kick's public signing key, which the service
+fetches from Kick (and fetches again if Kick rotates it).
+
 ## Soundboard
 
 Viewers can pay to play a sound from a list you choose. Put the sound files in

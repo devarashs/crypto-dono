@@ -14,6 +14,8 @@ import { createDonationRepository } from './donations/donation-repository.ts';
 import { createLeaderboardQueries } from './donations/leaderboard.ts';
 import { createConnectionStore } from './platforms/connection-store.ts';
 import { createTwitchApi } from './twitch/twitch-api.ts';
+import { createKickApi } from './kick/kick-api.ts';
+import { createKickPublicKeySource } from './kick/kick-public-key.ts';
 import { createNowPaymentsClient } from './nowpayments/nowpayments-client.ts';
 
 function loadConfigOrExit() {
@@ -60,6 +62,12 @@ const app = buildApp(config, {
       eventSubSecret: loadOrCreateSessionSecret(join(dirname(config.databasePath), 'twitch-eventsub-secret')),
     },
   }),
+  ...(config.kick !== null && {
+    kick: {
+      api: createKickApi({ clientId: config.kick.clientId, clientSecret: config.kick.clientSecret }),
+      publicKey: createKickPublicKeySource(),
+    },
+  }),
   nowPayments: createNowPaymentsClient({
     apiKey: config.nowPayments.apiKey,
     baseUrl: config.nowPayments.baseUrl,
@@ -99,6 +107,7 @@ app.log.info(`Database: ${config.databasePath}`);
 app.log.info(`NOWPayments: ${config.nowPayments.sandbox ? 'sandbox' : 'production'}`);
 app.log.info(`Text-to-speech: ${config.tts === null ? 'off' : config.tts.url}`);
 app.log.info(`Twitch: ${config.twitch === null ? 'off (set TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET)' : 'configured; connect it from /admin'}`);
+app.log.info(`Kick: ${config.kick === null ? 'off (set KICK_CLIENT_ID and KICK_CLIENT_SECRET)' : 'configured; connect it from /admin'}`);
 app.log.info(`Admin page: ${config.adminPassword === null ? 'off (set ADMIN_PASSWORD)' : '/admin'}`);
 if (config.soundboardIssues.length > 0) {
   app.log.error(`Soundboard: off, because ${soundboardFileName} has problems. Fix them and restart:`);

@@ -38,32 +38,49 @@ export type AdminDashboardModel = {
   /** OBS Browser Sources for the Starting Soon, Be Right Back and Ending Soon scenes. */
   readonly sceneUrls: readonly string[];
   readonly testAlertUrl: string;
-  readonly twitch: TwitchStatus;
+  readonly twitch: PlatformStatus;
+  readonly kick: PlatformStatus;
   readonly notice?: string;
 };
 
-export type TwitchStatus =
+export type PlatformStatus =
   | { readonly state: 'not-configured' }
   | { readonly state: 'disconnected' }
   | { readonly state: 'connected'; readonly login: string }
   | { readonly state: 'revoked'; readonly login: string; readonly reason: string };
 
-/** The Twitch section of the dashboard: its status, and the one action that makes sense. */
-function renderTwitchStatus(twitch: TwitchStatus): SafeHtml {
-  switch (twitch.state) {
+type PlatformSection = {
+  /** Shown to the streamer, e.g. "Twitch". */
+  readonly name: string;
+  /** The admin path segment, e.g. "twitch" for /admin/twitch/connect. */
+  readonly path: string;
+  /** The .env prefix of its credentials, e.g. "TWITCH". */
+  readonly variablePrefix: string;
+  /** What it alerts, for the not-configured hint. */
+  readonly events: string;
+};
+
+const platformSections = {
+  twitch: { name: 'Twitch', path: 'twitch', variablePrefix: 'TWITCH', events: 'follows, subs, bits and raids' },
+  kick: { name: 'Kick', path: 'kick', variablePrefix: 'KICK', events: 'follows, subs and Kicks' },
+} as const satisfies Record<string, PlatformSection>;
+
+/** A platform's section of the dashboard: its status, and the one action that makes sense. */
+function renderPlatformStatus(platform: PlatformSection, status: PlatformStatus): SafeHtml {
+  switch (status.state) {
     case 'not-configured':
-      return html`<p class="muted">Set TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET in .env to show follows, subs, bits and raids.</p>`;
+      return html`<p class="muted">Set ${platform.variablePrefix}_CLIENT_ID and ${platform.variablePrefix}_CLIENT_SECRET in .env to show ${platform.events}.</p>`;
     case 'disconnected':
       return html`<p class="muted">Not connected.</p>
-        <p><a class="button button--small" href="/admin/twitch/connect">Connect Twitch</a></p>`;
+        <p><a class="button button--small" href="/admin/${platform.path}/connect">Connect ${platform.name}</a></p>`;
     case 'connected':
-      return html`<p>Connected as <strong>${twitch.login}</strong>.</p>
-        <form method="post" action="/admin/twitch/disconnect">
+      return html`<p>Connected as <strong>${status.login}</strong>.</p>
+        <form method="post" action="/admin/${platform.path}/disconnect">
           <button class="button button--ghost button--small" type="submit">Disconnect</button>
         </form>`;
     case 'revoked':
-      return html`<p class="field__error">Twitch stopped sending events for ${twitch.login} (${twitch.reason}).</p>
-        <p><a class="button button--small" href="/admin/twitch/connect">Reconnect Twitch</a></p>`;
+      return html`<p class="field__error">${platform.name} stopped sending events for ${status.login} (${status.reason}).</p>
+        <p><a class="button button--small" href="/admin/${platform.path}/connect">Reconnect ${platform.name}</a></p>`;
   }
 }
 
@@ -92,7 +109,11 @@ export function renderAdminDashboard(model: AdminDashboardModel): SafeHtml {
       <p class="footnote">These links contain your overlay token. Keep them off stream.</p>
       <section class="admin-platform" aria-label="Twitch">
         <h2 class="panel__title">Twitch alerts</h2>
-        ${renderTwitchStatus(model.twitch)}
+        ${renderPlatformStatus(platformSections.twitch, model.twitch)}
+      </section>
+      <section class="admin-platform" aria-label="Kick">
+        <h2 class="panel__title">Kick alerts</h2>
+        ${renderPlatformStatus(platformSections.kick, model.kick)}
       </section>
       <nav class="tabs" aria-label="Filter donations">
         ${model.showUnpaid

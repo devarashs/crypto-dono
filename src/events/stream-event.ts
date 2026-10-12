@@ -11,18 +11,22 @@ export type StreamPlatform = (typeof streamPlatforms)[number];
 
 /**
  * Kinds of event. "resub" is a subscription announced with its month count;
- * it shares the "sub" on/off switch and sound but has its own wording.
+ * it shares the "sub" on/off switch and sound but has its own wording. "kicks"
+ * is Kick's paid gift, its counterpart to Twitch bits: it shares the "cheer"
+ * switch and sound but has its own wording.
  */
-export const streamEventKinds = ['follow', 'sub', 'resub', 'gift', 'cheer', 'raid'] as const;
+export const streamEventKinds = ['follow', 'sub', 'resub', 'gift', 'cheer', 'kicks', 'raid'] as const;
 export type StreamEventKind = (typeof streamEventKinds)[number];
 
 /** Kinds the streamer can switch on and off with EVENT_ALERTS. */
 export const switchableEventKinds = ['follow', 'sub', 'gift', 'cheer', 'raid'] as const;
 export type SwitchableEventKind = (typeof switchableEventKinds)[number];
 
-/** The switch that controls a kind: resubs follow the "sub" switch. */
+/** The switch that controls a kind: resubs follow "sub", Kicks follow "cheer". */
 export function switchFor(kind: StreamEventKind): SwitchableEventKind {
-  return kind === 'resub' ? 'sub' : kind;
+  if (kind === 'resub') return 'sub';
+  if (kind === 'kicks') return 'cheer';
+  return kind;
 }
 
 export type StreamEvent = {
@@ -36,9 +40,11 @@ export type StreamEvent = {
   readonly count?: number;
   /** Cheer: bits cheered. */
   readonly bits?: number;
+  /** Kicks: how many Kicks were sent. */
+  readonly kicks?: number;
   /** Raid: viewers brought along. */
   readonly viewers?: number;
-  /** Resub or cheer message, as the viewer typed it. */
+  /** Resub, cheer or Kicks message, as the viewer typed it. */
   readonly message?: string;
 };
 
@@ -49,5 +55,6 @@ export const defaultEventTemplates: Readonly<Record<StreamEventKind, string>> = 
   resub: '{name} resubscribed for {months} months',
   gift: '{name} gifted {count} {subs}',
   cheer: '{name} cheered {bits} bits',
+  kicks: '{name} sent {kicks} Kicks',
   raid: '{name} is raiding with {viewers} viewers',
 };

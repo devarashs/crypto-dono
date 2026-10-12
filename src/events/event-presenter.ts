@@ -21,7 +21,7 @@ export type EventPresenterSettings = {
 export type EventPresenter = (event: StreamEvent, alertId: string) => OverlayAlert | null;
 
 /** Numbers are highlighted in the headline, like donation amounts. */
-const emphasisedValues = new Set(['months', 'count', 'bits', 'viewers']);
+const emphasisedValues = new Set(['months', 'count', 'bits', 'kicks', 'viewers']);
 
 export function createEventPresenter(settings: EventPresenterSettings, bannedWords: BannedWordFilter): EventPresenter {
   return (event, alertId) => {
@@ -36,6 +36,7 @@ export function createEventPresenter(settings: EventPresenterSettings, bannedWor
       count: formatNumber(count),
       subs: count === 1 ? 'sub' : 'subs',
       bits: formatNumber(event.bits ?? 0),
+      kicks: formatNumber(event.kicks ?? 0),
       viewers: formatNumber(event.viewers ?? 0),
     };
     const icon = event.platform === 'test' ? undefined : socialIcons[event.platform];

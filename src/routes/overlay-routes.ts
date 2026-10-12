@@ -354,6 +354,7 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
     resub: { kind: 'resub', actorName: 'TestSubscriber', months: 12, message: 'A whole year already, love the streams!' },
     gift: { kind: 'gift', actorName: 'TestGifter', count: 5 },
     cheer: { kind: 'cheer', actorName: 'TestCheerer', bits: 500, message: 'Take my bits!' },
+    kicks: { kind: 'kicks', actorName: 'TestKicker', kicks: 100, message: 'Take my Kicks!' },
     raid: { kind: 'raid', actorName: 'TestRaider', viewers: 42 },
   };
 
