@@ -176,13 +176,13 @@ public subscriptions and lags), so it comes last and with its limits stated.
       each card, and test buttons for every kind on the test-alert page.
       Verified in Chromium: raid, follow (compact card) and resub with message,
       queued behind a pending donation, with Twitch and Kick badges.
-- [ ] 21. Twitch: shelved 2026-10-11. Built and deployed but off unless
-      TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET are set: OAuth connect from the
-      admin page, EventSub webhooks with verified signatures, de-duplication and
-      revocation handling. Verified up to Twitch: all six subscriptions enabled
-      for the right channel, and a signed notification sent on the server
-      reached the overlay. Twitch then delivered no real follow or cheer, so
-      it was never shown working end to end, and the streamer stopped there.
+- [x] 21. Twitch: OAuth connect from the admin page, EventSub webhooks with
+      verified signatures, de-duplication and revocation handling; off unless
+      TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET are set. Verified up to Twitch
+      on 2026-10-11 (all six subscriptions enabled; a signed notification sent
+      on the server reached the overlay), but no real events arrived while the
+      channel was offline, so it was shelved. On 2026-10-12 the streamer
+      reconnected and reported real follow alerts arriving while live.
 
 ## Phase 9 — Soundboard
 
