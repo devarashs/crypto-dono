@@ -13,8 +13,10 @@ import type { SocialLinkModel } from './social-links.ts';
  *
  * @param options.wide A wider column, for the donation page with its
  *   leaderboard and for the admin history.
+ * @param options.script A same-origin module that enhances the page. The page
+ *   must still work without it, and its route must allow script in its policy.
  */
-export function layout(title: string, content: SafeHtml, options: { wide?: boolean } = {}): SafeHtml {
+export function layout(title: string, content: SafeHtml, options: { wide?: boolean; script?: string } = {}): SafeHtml {
   return html`<!doctype html>
 <html lang="en">
   <head>
@@ -24,6 +26,7 @@ export function layout(title: string, content: SafeHtml, options: { wide?: boole
     <title>${title}</title>
     <link rel="preload" href="/fonts/orbitron-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/static/styles.css">
+    ${options.script !== undefined && html`<script type="module" src="${options.script}"></script>`}
   </head>
   <body>
     ${backdrop()}

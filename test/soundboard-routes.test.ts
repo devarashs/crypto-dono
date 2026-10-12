@@ -105,9 +105,25 @@ describe('soundboard routes', () => {
     expect(page.body).toContain('value="airhorn"');
     expect(page.body).toContain('$2.50');
     expect(page.body).toContain('Bruh &lt;3');
-    expect(page.body).toContain('src="/sounds/bruh/audio"');
+    expect(page.body).toContain('data-preview="/sounds/bruh/audio"');
     expect(page.body).toMatch(/name="listed"\s+checked/);
-    expect(page.body).not.toContain('<script');
+    // Only the page's own preview script, which the page's policy allows; no inline script.
+    expect(page.body.match(/<script[^>]*>/g)).toEqual(['<script type="module" src="/static/sound-preview.js">']);
+    expect(page.headers['content-security-policy']).toContain("script-src 'self'");
+  });
+
+  it('lays the pads out cheapest first', async () => {
+    listSounds();
+    const page = await build().inject({ method: 'GET', url: '/sounds' });
+    expect(page.body.indexOf('value="bruh"')).toBeLessThan(page.body.indexOf('value="airhorn"'));
+  });
+
+  it('keeps scripts off every other page', async () => {
+    listSounds();
+    const server = build();
+    for (const url of ['/', '/sounds/airhorn/audio', '/thanks']) {
+      expect((await server.inject({ method: 'GET', url })).headers['content-security-policy'], url).toContain("script-src 'none'");
+    }
   });
 
   it('charges the listed price whatever the form says, and records the sound', async () => {
