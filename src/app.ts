@@ -25,6 +25,7 @@ import type { NowPaymentsClient } from './nowpayments/nowpayments-client.ts';
 import { registerAdminRoutes } from './routes/admin-routes.ts';
 import { registerDonationRoutes, sendHtml } from './routes/donation-routes.ts';
 import { registerOverlayRoutes } from './routes/overlay-routes.ts';
+import { registerSoundboardRoutes } from './routes/soundboard-routes.ts';
 import { registerWebhookRoutes } from './routes/webhook-routes.ts';
 import type { AlertSpeech } from './tts/alert-speech.ts';
 import { renderErrorPage } from './web/pages.ts';
@@ -201,6 +202,13 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
         eventSubSecret: twitch.eventSubSecret,
         publishEvent,
       });
+    });
+  }
+
+  const { soundboard } = config;
+  if (soundboard !== null) {
+    app.register(async (scope) => {
+      registerSoundboardRoutes(scope, { config: { ...config, soundboard } });
     });
   }
 
