@@ -29,6 +29,7 @@ import { connectTwitch, disconnectTwitch } from '../twitch/twitch-connection.ts'
 import { createPkcePair, type KickApi } from '../kick/kick-api.ts';
 import { connectKick, disconnectKick } from '../kick/kick-connection.ts';
 import type { ConnectablePlatform } from '../platforms/connection-store.ts';
+import type { HealthPlatform, SubscriptionHealth } from '../platforms/subscription-health.ts';
 import type { PlatformStatus } from '../web/admin-pages.ts';
 import type { AlertHub } from '../alerts/alert-hub.ts';
 import { donationToAlertSource, type AlertPresenter, type PresentedAlert } from '../alerts/alert-presenter.ts';
@@ -61,6 +62,8 @@ export type AdminRouteDependencies = {
   };
   /** Present when KICK_CLIENT_ID and KICK_CLIENT_SECRET are set. */
   readonly kick?: { readonly api: KickApi };
+  /** The last subscription health check, shown with each connected platform. */
+  readonly subscriptionHealth?: Pick<SubscriptionHealth, 'finding' | 'clear'>;
   readonly now?: () => number;
 };
 
@@ -91,7 +94,7 @@ const notices: Readonly<Record<string, string>> = {
 };
 
 export function registerAdminRoutes(app: FastifyInstance, dependencies: AdminRouteDependencies): void {
-  const { config, donations, alertHub, presentAlert, publishAlert, connections, twitch, kick } = dependencies;
+  const { config, donations, alertHub, presentAlert, publishAlert, connections, twitch, kick, subscriptionHealth } = dependencies;
   const now = dependencies.now ?? Date.now;
   const twitchRedirectUri = `${config.publicBaseUrl}/admin/twitch/callback`;
   const kickRedirectUri = `${config.publicBaseUrl}/admin/kick/callback`;
@@ -121,13 +124,15 @@ export function registerAdminRoutes(app: FastifyInstance, dependencies: AdminRou
     return pending?.codeVerifier;
   }
 
-  function platformStatus(platform: ConnectablePlatform, configured: boolean): PlatformStatus {
+  function platformStatus(platform: ConnectablePlatform & HealthPlatform, configured: boolean): PlatformStatus {
     if (!configured) return { state: 'not-configured' };
     const connection = connections.find(platform);
     if (connection === undefined) return { state: 'disconnected' };
-    return connection.status === 'active'
-      ? { state: 'connected', login: connection.accountLogin }
-      : { state: 'revoked', login: connection.accountLogin, reason: connection.statusReason ?? 'unknown' };
+    if (connection.status !== 'active') {
+      return { state: 'revoked', login: connection.accountLogin, reason: connection.statusReason ?? 'unknown' };
+    }
+    const problem = subscriptionHealth?.finding(platform)?.problem ?? null;
+    return { state: 'connected', login: connection.accountLogin, ...(problem !== null && { problem }) };
   }
 
   app.register(fastifyCookie);
@@ -241,6 +246,7 @@ export function registerAdminRoutes(app: FastifyInstance, dependencies: AdminRou
         try {
           const result = await connectTwitch(twitchDependencies, request.query.code, twitchRedirectUri);
           request.log.info({ login: result.login, failedTypes: result.failedTypes }, 'Twitch connected');
+          subscriptionHealth?.clear('twitch');
           const notice = result.failedTypes.length === 0 ? 'twitch-connected' : 'twitch-partial';
           return reply.redirect(`/admin?notice=${notice}`, 303);
         } catch (error) {
@@ -283,6 +289,7 @@ export function registerAdminRoutes(app: FastifyInstance, dependencies: AdminRou
         try {
           const result = await connectKick(kickDependencies, request.query.code, kickRedirectUri, codeVerifier);
           request.log.info({ login: result.login, failedEvents: result.failedEvents }, 'Kick connected');
+          subscriptionHealth?.clear('kick');
           return reply.redirect(`/admin?notice=${result.failedEvents.length === 0 ? 'kick-connected' : 'kick-partial'}`, 303);
         } catch (error) {
           request.log.error({ err: error }, 'Connecting Kick failed');
