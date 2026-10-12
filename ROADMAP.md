@@ -189,18 +189,23 @@ and it plays on stream. Its own page; name only, no message and no TTS; the
 listed price exactly; purchases count as donations everywhere (leaderboard and
 on-stream table, respecting the opt-out).
 
-- [ ] 24. The streamer's sound list: `soundboard.json` in CUSTOM_ASSETS_DIR
+- [x] 24. The streamer's sound list: `soundboard.json` in CUSTOM_ASSETS_DIR
       (id, name, price, file). Checked at startup: a missing file, duplicate id,
       or price outside the donation range stops the service, naming the entry.
       No file means no soundboard. Sound files are served publicly for preview.
-- [ ] 25. A `/sounds` page: each sound with its price and a preview, pick one,
+- [x] 25. A `/sounds` page: each sound with its price and a preview, pick one,
       name and leaderboard choice, pay. The invoice uses the price from the
       list, never from the form. The donation records the sound's id, name and
       price at purchase (migration 7). Linked from the donation page.
-- [ ] 26. On stream: a paid sound shows "{name} played {sound}" and plays that
+- [x] 26. On stream: a paid sound shows "{name} played {sound}" and plays that
       file instead of the chime, cut off after 20 seconds. Queued, replayable
       and skippable like any donation, with a test button per sound. Proven with
       a signed payment notification, watching the overlay play it.
+      Verified in Chromium: the /sounds page at desktop and phone width with
+      previews playing; on the overlay, a test purchase showed "Test viewer
+      played Air horn" with its file, and a 25-second clip held the card until
+      it was cut off at 20 seconds. A signed IPN for a bought sound published
+      the sound alert (route test).
 
 ## Deferred ideas
 
