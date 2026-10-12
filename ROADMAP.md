@@ -214,11 +214,34 @@ on-stream table, respecting the opt-out).
       it was cut off at 20 seconds. A signed IPN for a bought sound published
       the sound alert (route test).
 
+## Phase 10 — Kick alerts
+
+Agreed 2026-10-13, after Twitch alerts were confirmed working live. Checked
+against docs.kick.com first: webhooks are signed by Kick with RSA (SHA-256,
+PKCS#1 v1.5) over "message id.timestamp.raw body", verified with the public key
+from api.kick.com/public/v1/public-key; the webhook URL is set once in the
+Kick app's settings. Kick's public API has no raid or host event, so Kick
+raids cannot alert.
+
+- [ ] 27. Receive Kick events at POST /webhooks/kick: signature verified against
+      Kick's public key (fetched, cached, re-fetched once if a signature fails,
+      since Kick may rotate it), stale and duplicate messages refused. Follows,
+      new subs, renewals (as resubs with months), gift subs (one alert per gift)
+      and Kicks ("{name} sent {kicks} Kicks", on the cheer switch and sound, own
+      wording in EVENT_TEMPLATE_KICKS). Message de-duplication moves to one table
+      for every platform (migration 8). Tested with messages signed by a
+      generated key, built as Kick's docs describe.
+- [ ] 28. Connect Kick from the admin page: OAuth 2.1 with PKCE identifies the
+      streamer and subscribes to the five events; Disconnect removes them.
+      Off unless KICK_CLIENT_ID and KICK_CLIENT_SECRET are set. Done when a real
+      follow on the streamer's Kick channel alerts. Open questions to settle
+      live: whether a renewal's duration is cumulative months, and whether
+      subscriptions outlive the user token used to create them.
+
 ## Deferred ideas
 
 - Donor-chosen text-to-speech voices (one multi-speaker Piper model, e.g.
   en_US-libritts_r-medium, CC BY 4.0, with named picks). Raised and set aside
   2026-10-11 in favour of platform alerts.
-- Kick and YouTube event alerts (were items 22 and 23). Dropped with Twitch on
-  2026-10-11. If Twitch is picked up again, try its EventSub WebSocket transport
-  and a channel.update delivery test before anything else.
+- YouTube event alerts (was item 23). Dropped on 2026-10-11; Kick was picked
+  up again as Phase 10.
