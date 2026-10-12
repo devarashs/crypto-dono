@@ -57,6 +57,7 @@ describe('loadConfig', () => {
           resub: '{name} resubscribed for {months} months',
           gift: '{name} gifted {count} {subs}',
           cheer: '{name} cheered {bits} bits',
+          kicks: '{name} sent {kicks} Kicks',
           raid: '{name} is raiding with {viewers} viewers',
         },
         sounds: {

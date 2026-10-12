@@ -138,6 +138,7 @@ const environmentSchema = z.object({
   EVENT_TEMPLATE_RESUB: eventTemplate('resub'),
   EVENT_TEMPLATE_GIFT: eventTemplate('gift'),
   EVENT_TEMPLATE_CHEER: eventTemplate('cheer'),
+  EVENT_TEMPLATE_KICKS: eventTemplate('kicks'),
   EVENT_TEMPLATE_RAID: eventTemplate('raid'),
   // Optional sound per kind: empty for the kind's built-in tone, "none", or a
   // file in CUSTOM_ASSETS_DIR. Resubs use EVENT_SOUND_SUB.
@@ -408,6 +409,7 @@ export function loadConfig(
     resub: variables.EVENT_TEMPLATE_RESUB,
     gift: variables.EVENT_TEMPLATE_GIFT,
     cheer: variables.EVENT_TEMPLATE_CHEER,
+    kicks: variables.EVENT_TEMPLATE_KICKS,
     raid: variables.EVENT_TEMPLATE_RAID,
   };
   // A soundboard problem turns the soundboard off rather than stopping the

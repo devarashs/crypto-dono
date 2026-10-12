@@ -41,6 +41,7 @@ describe('createEventPresenter', () => {
     [{ kind: 'gift', actorName: 'Bo', count: 1 }, 'Bo gifted 1 sub'],
     [{ kind: 'gift', actorName: 'Bo', count: 25 }, 'Bo gifted 25 subs'],
     [{ kind: 'cheer', actorName: 'Cy', bits: 1500 }, 'Cy cheered 1,500 bits'],
+    [{ kind: 'kicks', actorName: 'Ky', kicks: 1000 }, 'Ky sent 1,000 Kicks'],
     [{ kind: 'raid', actorName: 'BigStreamer', viewers: 1234 }, 'BigStreamer is raiding with 1,234 viewers'],
   ] as const)('words %j as %j', (event, text) => {
     expect(headlineText(present(twitch(event), 'e')?.headline ?? [])).toBe(text);

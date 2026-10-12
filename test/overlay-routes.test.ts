@@ -669,6 +669,7 @@ describe('overlay routes', () => {
       ['resub', 'TestSubscriber resubscribed for 12 months'],
       ['gift', 'TestGifter gifted 5 subs'],
       ['cheer', 'TestCheerer cheered 500 bits'],
+      ['kicks', 'TestKicker sent 100 Kicks'],
       ['raid', 'TestRaider is raiding with 42 viewers'],
     ])('publishes a %s test event to overlays', async (kind, text) => {
       buildEventApp();
@@ -706,7 +707,7 @@ describe('overlay routes', () => {
     it('shows a button for every kind on the test page', async () => {
       buildEventApp();
       const page = (await eventApp.inject({ method: 'GET', url: `/overlay/${token}/test` })).body;
-      for (const kind of ['follow', 'sub', 'resub', 'gift', 'cheer', 'raid']) {
+      for (const kind of ['follow', 'sub', 'resub', 'gift', 'cheer', 'kicks', 'raid']) {
         expect(page).toContain(`name="kind" value="${kind}"`);
       }
       expect(page).toContain('action="test/event"');

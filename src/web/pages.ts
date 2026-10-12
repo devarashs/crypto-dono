@@ -384,6 +384,7 @@ const testEventButtons = [
   ['resub', 'Resub'],
   ['gift', 'Gift subs'],
   ['cheer', 'Bits'],
+  ['kicks', 'Kicks'],
   ['raid', 'Raid'],
 ] as const;
 
