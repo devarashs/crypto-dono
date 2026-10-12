@@ -27,13 +27,14 @@ export function renderSoundboardPage(model: SoundboardPageModel): SafeHtml {
   const errors = model.errors ?? {};
   // Listing is opt-out, as on the donation page.
   const values = model.values ?? { donorName: '', soundId: '', listed: true };
-  const heading = model.streamerName === '' ? 'Soundboard' : `${model.streamerName}'s soundboard`;
+  // A short heading: the display font is wide, and a long name would break mid-word.
+  const title = model.streamerName === '' ? 'Soundboard' : `${model.streamerName}'s soundboard`;
 
   const form = html`
     <h2 class="panel__title">Play a sound</h2>
     ${model.notice !== undefined && html`<p class="notice" role="status">${model.notice}</p>`}
     <form class="form" method="post" action="/sounds" novalidate>
-      <fieldset class="field"${errors.soundId !== undefined && html` aria-describedby="soundId-error"`}>
+      <fieldset class="field sound-picker"${errors.soundId !== undefined && html` aria-describedby="soundId-error"`}>
         <legend class="field__label">Sound</legend>
         <ul class="sound-list">
           ${model.sounds.map((sound) => renderSoundOption(sound, model.currency, sound.id === values.soundId))}
@@ -62,10 +63,10 @@ export function renderSoundboardPage(model: SoundboardPageModel): SafeHtml {
   `;
 
   return layout(
-    heading,
+    title,
     html`
       <header class="hero rise-in">
-        ${glitchTitle(heading)}
+        ${glitchTitle('Soundboard')}
         <p class="hero__tagline">Pick a sound. It plays on stream once your payment confirms.</p>
       </header>
       ${panel(form, { className: 'panel--sounds', label: 'Soundboard' })}

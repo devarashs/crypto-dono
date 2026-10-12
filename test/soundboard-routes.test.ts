@@ -96,7 +96,7 @@ describe('soundboard routes', () => {
     listSounds();
     const page = await build().inject({ method: 'GET', url: '/sounds' });
     expect(page.statusCode).toBe(200);
-    expect(page.body).toContain('machinearash&#39;s soundboard');
+    expect(page.body).toContain('<title>machinearash&#39;s soundboard</title>');
     expect(page.body).toContain('value="airhorn"');
     expect(page.body).toContain('$2.50');
     expect(page.body).toContain('Bruh &lt;3');
