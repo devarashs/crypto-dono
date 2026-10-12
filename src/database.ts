@@ -151,6 +151,25 @@ export const migrations: readonly Migration[] = [
       ALTER TABLE donations ADD COLUMN sound_name TEXT;
     `,
   },
+  {
+    version: 8,
+    description: 'One webhook de-duplication table for every platform',
+    sql: `
+      -- Webhooks are delivered "at least once"; a message id seen before is
+      -- ignored. Kick ids are ULIDs and Twitch ids UUIDs, but the platform is in
+      -- the key so an id can never collide across them. Pruned after a day.
+      CREATE TABLE platform_messages (
+        platform TEXT NOT NULL CHECK (platform IN ('twitch', 'kick', 'youtube')),
+        message_id TEXT NOT NULL,
+        received_at TEXT NOT NULL,
+        PRIMARY KEY (platform, message_id)
+      ) STRICT;
+      CREATE INDEX platform_messages_received_at ON platform_messages (received_at);
+      INSERT INTO platform_messages (platform, message_id, received_at)
+        SELECT 'twitch', message_id, received_at FROM twitch_messages;
+      DROP TABLE twitch_messages;
+    `,
+  },
 ];
 
 /** The schema version a freshly opened database ends up at. */

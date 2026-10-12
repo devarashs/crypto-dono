@@ -44,9 +44,9 @@ export function createConnectionStore(database: Database, now: () => Date = () =
   `);
   const deleteStatement = database.prepare('DELETE FROM platform_connections WHERE platform = ?');
   const rememberMessageStatement = database.prepare(
-    'INSERT OR IGNORE INTO twitch_messages (message_id, received_at) VALUES (?, ?)',
+    'INSERT OR IGNORE INTO platform_messages (platform, message_id, received_at) VALUES (?, ?, ?)',
   );
-  const pruneMessagesStatement = database.prepare('DELETE FROM twitch_messages WHERE received_at < ?');
+  const pruneMessagesStatement = database.prepare('DELETE FROM platform_messages WHERE received_at < ?');
 
   return {
     find(platform: ConnectablePlatform): PlatformConnection | undefined {
@@ -79,14 +79,14 @@ export function createConnectionStore(database: Database, now: () => Date = () =
     },
 
     /**
-     * Records a Twitch message id.
+     * Records a webhook message id.
      * @returns true the first time this id is seen, false for a duplicate delivery.
      */
-    rememberTwitchMessage(messageId: string): boolean {
+    rememberMessage(platform: ConnectablePlatform, messageId: string): boolean {
       const timestamp = now();
       // Cheap enough to do on every message; keeps the table to about a day.
       pruneMessagesStatement.run(new Date(timestamp.getTime() - 24 * 60 * 60 * 1000).toISOString());
-      return rememberMessageStatement.run(messageId, timestamp.toISOString()).changes === 1;
+      return rememberMessageStatement.run(platform, messageId, timestamp.toISOString()).changes === 1;
     },
   };
 }

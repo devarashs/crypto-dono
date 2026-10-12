@@ -71,7 +71,7 @@ export function registerTwitchWebhookRoutes(app: FastifyInstance, dependencies: 
       return reply.code(200).type('text/plain').send(message.challenge ?? '');
     }
 
-    if (messageId === undefined || !connections.rememberTwitchMessage(messageId)) {
+    if (messageId === undefined || !connections.rememberMessage('twitch', messageId)) {
       request.log.info(logContext, 'Ignored a duplicate Twitch message');
       return reply.code(204).send();
     }

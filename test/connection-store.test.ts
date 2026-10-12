@@ -44,17 +44,20 @@ describe('connection store', () => {
     expect(store.find('twitch')).toBeUndefined();
   });
 
-  describe('rememberTwitchMessage', () => {
+  describe('rememberMessage', () => {
     it('is true the first time and false for a duplicate', () => {
-      expect(store.rememberTwitchMessage('m1')).toBe(true);
-      expect(store.rememberTwitchMessage('m1')).toBe(false);
-      expect(store.rememberTwitchMessage('m2')).toBe(true);
+      expect(store.rememberMessage('twitch', 'm1')).toBe(true);
+      expect(store.rememberMessage('twitch', 'm1')).toBe(false);
+      expect(store.rememberMessage('twitch', 'm2')).toBe(true);
+      // The same id from another platform is a different message.
+      expect(store.rememberMessage('kick', 'm1')).toBe(true);
+      expect(store.rememberMessage('kick', 'm1')).toBe(false);
     });
 
     it('forgets ids older than a day', () => {
-      store.rememberTwitchMessage('m1');
+      store.rememberMessage('twitch', 'm1');
       clock = new Date('2026-10-12T12:00:01.000Z');
-      expect(store.rememberTwitchMessage('m1')).toBe(true);
+      expect(store.rememberMessage('twitch', 'm1')).toBe(true);
     });
   });
 });
