@@ -237,6 +237,15 @@ raids cannot alert.
       follow on the streamer's Kick channel alerts. Open questions to settle
       live: whether a renewal's duration is cumulative months, and whether
       subscriptions outlive the user token used to create them.
+      Decided 2026-10-13: until a real renewal settles it, Kick resubs show
+      "{name} resubscribed" with no number (right either way), and the server
+      logs Kick's duration so it can be compared with the viewer's badge.
+- [ ] 29. Daily subscription health check for Twitch and Kick: at startup and
+      once a day the server asks each platform which alert subscriptions exist;
+      any expected one that is missing or not enabled is shown on the admin
+      page with a Reconnect button. Alerts keep flowing for the rest. No user
+      tokens are stored; if Kick turns out to drop subscriptions when the user
+      token expires, refreshing it becomes a separate item.
 
 ## Deferred ideas
 
