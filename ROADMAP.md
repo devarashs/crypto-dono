@@ -191,7 +191,9 @@ on-stream table, respecting the opt-out).
 
 - [x] 24. The streamer's sound list: `soundboard.json` in CUSTOM_ASSETS_DIR
       (id, name, price, file). Checked at startup: a missing file, duplicate id,
-      or price outside the donation range stops the service, naming the entry.
+      or price outside the donation range turns the soundboard off and logs the
+      entry. (First built to stop the service; changed 2026-10-12 after a bad id
+      took the site down in production. Ids now allow capitals and underscores.)
       No file means no soundboard. Sound files are served publicly for preview.
 - [x] 25. A `/sounds` page: each sound with its price and a preview, pick one,
       name and leaderboard choice, pay. The invoice uses the price from the

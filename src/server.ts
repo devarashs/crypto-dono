@@ -3,7 +3,7 @@
  * cleanly on SIGINT/SIGTERM so `docker stop` does not cut off in-flight requests.
  */
 import { buildApp } from './app.ts';
-import { ConfigError, loadConfig } from './config.ts';
+import { ConfigError, loadConfig, soundboardFileName } from './config.ts';
 import { openDatabase } from './database.ts';
 import { join, dirname } from 'node:path';
 import { loadOrCreateSessionSecret } from './admin/admin-auth.ts';
@@ -100,3 +100,9 @@ app.log.info(`NOWPayments: ${config.nowPayments.sandbox ? 'sandbox' : 'productio
 app.log.info(`Text-to-speech: ${config.tts === null ? 'off' : config.tts.url}`);
 app.log.info(`Twitch: ${config.twitch === null ? 'off (set TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET)' : 'configured; connect it from /admin'}`);
 app.log.info(`Admin page: ${config.adminPassword === null ? 'off (set ADMIN_PASSWORD)' : '/admin'}`);
+if (config.soundboardIssues.length > 0) {
+  app.log.error(`Soundboard: off, because ${soundboardFileName} has problems. Fix them and restart:`);
+  for (const issue of config.soundboardIssues) app.log.error(`  ${soundboardFileName}: ${issue}`);
+} else {
+  app.log.info(`Soundboard: ${config.soundboard === null ? `off (no ${soundboardFileName})` : `${config.soundboard.length} sounds at /sounds`}`);
+}
