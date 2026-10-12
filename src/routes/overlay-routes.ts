@@ -14,6 +14,7 @@
  *   GET  /overlay/:token/scene/qr.svg         QR code of the donation page
  *   GET  /overlay/:token/test                 form for sending a test alert
  *   POST /overlay/:token/test                 send a test alert to connected overlays
+ *   POST /overlay/:token/test/sound           play a soundboard sound as if bought
  *
  * The token in the path is the only credential: OBS cannot send headers or log
  * in, so the URL itself is the secret. A wrong token answers 404 so the overlay's
@@ -282,6 +283,7 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
       renderTestAlertPage({
         currency: config.donation.currency,
         values: defaultTestValues,
+        sounds: config.soundboard ?? [],
         ...(notice !== undefined && { notice }),
       }),
     );
@@ -302,7 +304,12 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
       return sendHtml(
         reply,
         400,
-        renderTestAlertPage({ currency: config.donation.currency, values: result.values, errors: result.errors }),
+        renderTestAlertPage({
+          currency: config.donation.currency,
+          values: result.values,
+          errors: result.errors,
+          sounds: config.soundboard ?? [],
+        }),
       );
     }
     // Never stored, so the "test-" id makes the overlay's acknowledgement a no-op.
@@ -319,6 +326,25 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
     request.log.info({ overlays: alertHub.subscriberCount }, 'Test alert sent');
     // Post/redirect/get, so refreshing the result does not send another alert.
     return reply.redirect(`test?sent=${alertHub.subscriberCount}`, 303);
+  });
+
+  app.post<{ Params: TokenParams }>('/overlay/:token/test/sound', async (request, reply) => {
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const sound = config.soundboard?.find((candidate) => candidate.id === body.soundId);
+    if (sound === undefined) return reply.redirect('../test', 303);
+    // Presented like a real purchase, with a "test-" id the overlay never acknowledges.
+    publishAlert(
+      presentAlert({
+        id: `test-${randomUUID()}`,
+        donorName: 'Test viewer',
+        message: '',
+        amountMinor: sound.priceMinor,
+        currency: config.donation.currency,
+        sound: { id: sound.id, name: sound.name },
+      }),
+    );
+    request.log.info({ sound: sound.id, overlays: alertHub.subscriberCount }, 'Test sound sent');
+    return reply.redirect(`../test?sent=${alertHub.subscriberCount}`, 303);
   });
 
   /** Example data for each kind of test event, so every card can be previewed. */

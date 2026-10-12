@@ -390,6 +390,8 @@ export type TestAlertPageModel = {
   readonly errors?: DonationFormErrors;
   /** Result of the last send, e.g. "Sent to 1 overlay." */
   readonly notice?: string;
+  /** Soundboard sounds to preview on stream; empty without a soundboard. */
+  readonly sounds?: readonly { readonly id: string; readonly name: string }[];
 };
 
 /**
@@ -440,6 +442,17 @@ export function renderTestAlertPage(model: TestAlertPageModel): SafeHtml {
           )}
         </div>
       </form>
+      ${model.sounds !== undefined &&
+      model.sounds.length > 0 &&
+      html`<h2 class="panel__title test-events__title">Soundboard</h2>
+        <p class="muted">Play each sound on stream as if it had been bought. Nothing is charged.</p>
+        <form class="test-events" method="post" action="test/sound">
+          <div class="test-events__buttons">
+            ${model.sounds.map(
+              (sound) => html`<button class="button button--ghost button--small" type="submit" name="soundId" value="${sound.id}">${sound.name}</button>`,
+            )}
+          </div>
+        </form>`}
     `),
   );
 }

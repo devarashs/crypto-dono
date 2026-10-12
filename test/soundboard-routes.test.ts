@@ -3,9 +3,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createAlertHub } from '../src/alerts/alert-hub.ts';
+import { createAlertHub, type OverlayAlert } from '../src/alerts/alert-hub.ts';
 import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
+import { canonicalForms, signCanonicalBody } from '../src/nowpayments/ipn-signature.ts';
 import type { CreateInvoiceRequest } from '../src/nowpayments/nowpayments-client.ts';
 import { createInMemoryStore } from './support/in-memory-store.ts';
 
@@ -14,6 +15,7 @@ describe('soundboard routes', () => {
   let app: FastifyInstance | undefined;
   let store: ReturnType<typeof createInMemoryStore>;
   let invoices: CreateInvoiceRequest[];
+  let published: OverlayAlert[];
 
   beforeEach(() => {
     assetsDirectory = mkdtempSync(join(tmpdir(), 'crypto-dono-sounds-'));
@@ -54,6 +56,9 @@ describe('soundboard routes', () => {
     });
     store = createInMemoryStore();
     invoices = [];
+    published = [];
+    const alertHub = createAlertHub();
+    alertHub.subscribe((alert) => published.push(alert));
     app = buildApp(config, {
       donations: store.donations,
       leaderboard: store.leaderboard,
@@ -64,7 +69,7 @@ describe('soundboard routes', () => {
           return { invoiceId: 'inv-1', invoiceUrl: 'https://nowpayments.io/payment/?iid=inv-1' };
         },
       },
-      alertHub: createAlertHub(),
+      alertHub,
     });
     return app;
   }
@@ -168,5 +173,53 @@ describe('soundboard routes', () => {
     await app?.close();
     listSounds();
     expect((await build().inject({ method: 'GET', url: '/' })).body).toContain('href="/sounds"');
+  });
+
+  it('plays the bought sound on stream once the payment confirms', async () => {
+    listSounds();
+    const server = build({ NOWPAYMENTS_IPN_SECRET: 'ipn-secret-for-tests' });
+    await server.inject(form({ soundId: 'airhorn', donorName: 'NeonRider' }));
+    const orderId = invoices[0]!.orderId;
+    const ipn = { payment_id: 77, invoice_id: 'inv-1', order_id: orderId, payment_status: 'confirmed', price_amount: 2.5, price_currency: 'usd', pay_currency: 'ltc', actually_paid: 0.03 };
+    const [, canonical] = canonicalForms(ipn)[0]!;
+    const response = await server.inject({
+      method: 'POST',
+      url: '/webhooks/nowpayments',
+      headers: { 'content-type': 'application/json', 'x-nowpayments-sig': signCanonicalBody(canonical, 'ipn-secret-for-tests') },
+      payload: JSON.stringify(ipn),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(published).toEqual([
+      expect.objectContaining({
+        id: orderId,
+        kind: 'sound',
+        speak: false,
+        headline: [
+          { text: 'NeonRider played ', emphasis: false },
+          { text: 'Air horn', emphasis: true },
+        ],
+        sound: { type: 'file', path: '/sounds/airhorn/audio' },
+        soundLimitMs: 20_000,
+      }),
+    ]);
+  });
+
+  it('previews each sound on stream from the test page', async () => {
+    listSounds();
+    const server = build();
+    const token = 'overlay-token-for-tests-0123456789';
+    const page = await server.inject({ method: 'GET', url: `/overlay/${token}/test` });
+    expect(page.body).toContain('action="test/sound"');
+    expect(page.body).toContain('value="bruh">Bruh &lt;3</button>');
+
+    const response = await server.inject({
+      method: 'POST',
+      url: `/overlay/${token}/test/sound`,
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: 'soundId=bruh',
+    });
+    expect(response.statusCode).toBe(303);
+    expect(published).toEqual([expect.objectContaining({ id: expect.stringMatching(/^test-/), kind: 'sound', donorName: 'Test viewer' })]);
+    expect(store.donations.listPage({ paidOnly: false, limit: 10 }).donations).toEqual([]);
   });
 });

@@ -121,7 +121,8 @@ function renderDonationItem(donation: Donation): SafeHtml {
     <p class="donation-item__meta">
       <time datetime="${donation.createdAt}">${formatTimestamp(donation.createdAt)}</time>
       · ${describeStatus(donation)}${donation.payCurrency !== null && html` · ${donation.payCurrency.toUpperCase()}`}
-      · ${alertState}${!donation.showOnLeaderboard && html` · Hidden from leaderboard`}
+      · ${alertState}${!donation.showOnLeaderboard && html` · Hidden from leaderboard`}${donation.sound !== null &&
+      html` · Sound: ${donation.sound.name}`}
     </p>
     ${donation.alertTriggeredAt !== null &&
     html`<div class="donation-item__actions">
