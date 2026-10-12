@@ -223,7 +223,7 @@ from api.kick.com/public/v1/public-key; the webhook URL is set once in the
 Kick app's settings. Kick's public API has no raid or host event, so Kick
 raids cannot alert.
 
-- [ ] 27. Receive Kick events at POST /webhooks/kick: signature verified against
+- [x] 27. Receive Kick events at POST /webhooks/kick: signature verified against
       Kick's public key (fetched, cached, re-fetched once if a signature fails,
       since Kick may rotate it), stale and duplicate messages refused. Follows,
       new subs, renewals (as resubs with months), gift subs (one alert per gift)
