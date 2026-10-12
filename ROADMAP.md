@@ -182,6 +182,26 @@ public subscriptions and lags), so it comes last and with its limits stated.
       reached the overlay. Twitch then delivered no real follow or cheer, so
       it was never shown working end to end, and the streamer stopped there.
 
+## Phase 9 — Soundboard
+
+Agreed 2026-10-12: viewers pay for a sound from a list the streamer provides,
+and it plays on stream. Its own page; name only, no message and no TTS; the
+listed price exactly; purchases count as donations everywhere (leaderboard and
+on-stream table, respecting the opt-out).
+
+- [ ] 24. The streamer's sound list: `soundboard.json` in CUSTOM_ASSETS_DIR
+      (id, name, price, file). Checked at startup: a missing file, duplicate id,
+      or price outside the donation range stops the service, naming the entry.
+      No file means no soundboard. Sound files are served publicly for preview.
+- [ ] 25. A `/sounds` page: each sound with its price and a preview, pick one,
+      name and leaderboard choice, pay. The invoice uses the price from the
+      list, never from the form. The donation records the sound's id, name and
+      price at purchase (migration 7). Linked from the donation page.
+- [ ] 26. On stream: a paid sound shows "{name} played {sound}" and plays that
+      file instead of the chime, cut off after 20 seconds. Queued, replayable
+      and skippable like any donation, with a test button per sound. Proven with
+      a signed payment notification, watching the overlay play it.
+
 ## Deferred ideas
 
 - Donor-chosen text-to-speech voices (one multi-speaker Piper model, e.g.
