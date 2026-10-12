@@ -7,7 +7,7 @@
  * wrote, so the streamer can still see it, and changing a filter takes effect
  * for every alert shown afterwards, including replays.
  */
-import type { Donation } from '../donations/donation-repository.ts';
+import type { Donation, PurchasedSound } from '../donations/donation-repository.ts';
 import { formatMoneyForDisplay } from '../money.ts';
 import { buildSpeechText } from '../tts/alert-speech.ts';
 import { createBannedWordFilter } from './banned-words.ts';
@@ -20,6 +20,8 @@ export type AlertSource = {
   readonly message: string;
   readonly amountMinor: number;
   readonly currency: string;
+  /** Set for a soundboard purchase: the sound paid for. */
+  readonly sound?: PurchasedSound;
 };
 
 export type PresentedAlert = {
@@ -37,7 +39,19 @@ export type AlertFilterRules = {
   readonly speechMinAmountMinor: number;
   /** Speech template, or `null` when text-to-speech is off. */
   readonly speechTemplate: string | null;
+  /**
+   * Where the overlay fetches a soundboard sound, or `null` when that sound is
+   * no longer listed (the alert then plays the usual alert sound instead).
+   */
+  readonly soundboardPath?: (soundId: string) => string | null;
 };
+
+/** The longest a purchased sound may play on stream. */
+export const soundboardSoundLimitMs = 20_000;
+
+/** Material Symbols "volume_up" (Apache 2.0), shown on soundboard cards. */
+const speakerIconPath =
+  'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z';
 
 export type AlertPresenter = (source: AlertSource) => PresentedAlert;
 
@@ -48,6 +62,7 @@ export function donationToAlertSource(donation: Donation): AlertSource {
     message: donation.message,
     amountMinor: donation.amountMinor,
     currency: donation.currency,
+    ...(donation.sound !== null && { sound: donation.sound }),
   };
 }
 
@@ -55,6 +70,7 @@ export function createAlertPresenter(rules: AlertFilterRules): AlertPresenter {
   const bannedWords = createBannedWordFilter(rules.bannedWords);
 
   return (source) => {
+    if (source.sound !== undefined) return presentSoundPurchase(source, source.sound);
     const showMessage = source.amountMinor >= rules.messageMinAmountMinor;
     const message = showMessage ? source.message : '';
     const amount = formatMoneyForDisplay(source.amountMinor, source.currency);
@@ -77,4 +93,28 @@ export function createAlertPresenter(rules: AlertFilterRules): AlertPresenter {
         : null;
     return { alert, speechText };
   };
+
+  /**
+   * "NeonRider played Air horn": the sound is the alert, so there is no message
+   * and no speech to talk over it.
+   */
+  function presentSoundPurchase(source: AlertSource, sound: PurchasedSound): PresentedAlert {
+    const donorName = bannedWords.mask(source.donorName);
+    const path = rules.soundboardPath?.(sound.id) ?? null;
+    const alert: OverlayAlert = {
+      id: source.id,
+      donorName,
+      message: '',
+      amount: formatMoneyForDisplay(source.amountMinor, source.currency),
+      speak: false,
+      kind: 'sound',
+      headline: [
+        { text: `${donorName} played `, emphasis: false },
+        { text: sound.name, emphasis: true },
+      ],
+      badge: { label: 'Soundboard', iconPath: speakerIconPath },
+      ...(path !== null && { sound: { type: 'file', path }, soundLimitMs: soundboardSoundLimitMs }),
+    };
+    return { alert, speechText: null };
+  }
 }

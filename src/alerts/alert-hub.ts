@@ -31,13 +31,19 @@ export type OverlayAlert = {
   // ── Platform events only (follows, subs, ...). Absent on donation alerts,
   // which take their wording, sound and duration from the overlay page. ──
 
-  readonly kind?: StreamEventKind;
+  /** An event kind, or "sound" for a soundboard purchase. */
+  readonly kind?: StreamEventKind | 'sound';
   /** The wording, as parts; numbers are emphasised. */
   readonly headline?: readonly HeadlinePart[];
   /** Platform icon shown on the card, e.g. Twitch. */
   readonly badge?: { readonly label: string; readonly iconPath: string };
   readonly sound?: EventSoundCue;
   readonly durationMs?: number;
+  /**
+   * Soundboard purchases: keep the card up until the sound has finished, but
+   * stop the sound after this long, so no clip can run on indefinitely.
+   */
+  readonly soundLimitMs?: number;
 };
 
 /** How an event alert sounds: a built-in tone, silence, or a custom file. */

@@ -119,6 +119,8 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
     speechMinAmountMinor: config.filters.speechMinAmountMinor,
     // Speech only when both configured and wired up.
     speechTemplate: config.tts !== null && dependencies.alertSpeech !== undefined ? config.tts.template : null,
+    soundboardPath: (soundId) =>
+      config.soundboard?.some((sound) => sound.id === soundId) === true ? `/sounds/${encodeURIComponent(soundId)}/audio` : null,
   });
 
   /** Starts synthesising an alert's speech, if it is to be spoken. */
