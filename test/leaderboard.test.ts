@@ -113,13 +113,13 @@ describe('leaderboard queries', () => {
   });
 
   describe('biggest', () => {
-    it('lists single donations by size, not totals per name, Anonymous included', () => {
+    it('lists single donations by size, not totals per name, leaving Anonymous out', () => {
       donate('Ann', 500);
       donate('Ann', 600);
       donate('Anonymous', 2000);
+      donate('anonymous', 1500);
       donate('Bo', 900);
       expect(leaderboard.biggest('usd', 10)).toEqual([
-        { donorName: 'Anonymous', amountMinor: 2000 },
         { donorName: 'Bo', amountMinor: 900 },
         { donorName: 'Ann', amountMinor: 600 },
         { donorName: 'Ann', amountMinor: 500 },
@@ -153,14 +153,13 @@ describe('leaderboard queries', () => {
   });
 
   describe('recent', () => {
-    it('lists counted donations newest first, Anonymous included', () => {
+    it('lists counted donations newest first, leaving Anonymous out', () => {
       donate('Ann', 500);
       donate('Anonymous', 700);
       donate('Hidden', 900, { listed: false });
       donate('Bo', 300);
       expect(leaderboard.recent('usd', 10)).toMatchObject([
         { donorName: 'Bo', amountMinor: 300 },
-        { donorName: 'Anonymous', amountMinor: 700 },
         { donorName: 'Ann', amountMinor: 500 },
       ]);
     });

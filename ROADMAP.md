@@ -151,7 +151,9 @@ and Share Tech Mono, hard corners, neon grid and scanlines).
 - [x] 18. A small on-stream table under the camera shows the 10 biggest single
       donations of all time, as its own OBS Browser Source (542 × 340 at x 19,
       y 376 in the streamer's 1920 × 1080 layout). Opted-out donors excluded,
-      banned words masked, Anonymous shown; refreshes every 15 s.
+      banned words masked, Anonymous shown; refreshes every 15 s. (Changed
+      2026-10-12 at the streamer's request: Anonymous is now left out of every
+      public list, this table and the Latest lists included.)
       Verified in Chromium at 542 × 340 (29 px rows, both fonts) and live: a new
       $100 donation reached #1 within one refresh, with only that row animating.
 - [x] 19. Starting Soon, Be Right Back and Ending Soon scenes as 1920 × 1080

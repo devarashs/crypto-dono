@@ -3,8 +3,10 @@
  *
  * A donation counts when it is paid (its alert was triggered), was not later
  * refunded or failed, is in the configured currency, and the donor did not opt
- * out. Names are grouped by their case-insensitive key; "Anonymous" is never
- * ranked because it is not one person.
+ * out. Names are grouped by their case-insensitive key. "Anonymous" never
+ * appears in any list: it is not one person, and the streamer chose
+ * (2026-10-12) that every public list shows named donors only. Anonymous
+ * donations still alert on stream.
  *
  * Names are unverified: two people using one name share a row, and anyone can
  * donate under an existing name. Accepted when the feature was agreed.
@@ -37,12 +39,13 @@ export type BigDonation = {
 
 export type LeaderboardQueries = ReturnType<typeof createLeaderboardQueries>;
 
-/** The rows a public list may show; the same rule in both queries. */
+/** The rows a public list may show; the same rule in every query. */
 const listedPaidDonations = `
   show_on_leaderboard = 1
   AND alert_triggered_at IS NOT NULL
   AND status NOT IN ('refunded', 'failed')
   AND currency = :currency
+  AND donor_name_key <> :anonymousKey
 `;
 
 /**
@@ -62,7 +65,7 @@ export const topDonorsSql = `
         ORDER BY latest.id DESC LIMIT 1
       ) AS donor_name
     FROM donations AS grouped
-    WHERE ${listedPaidDonations} AND donor_name_key <> :anonymousKey
+    WHERE ${listedPaidDonations}
     GROUP BY donor_name_key
     ORDER BY total_minor DESC, last_donated_at ASC
     LIMIT :limit
@@ -94,15 +97,12 @@ export function createLeaderboardQueries(database: Database) {
   const topDonorsStatement = database.prepare(topDonorsSql);
   const recentStatement = database.prepare(recentSql);
   const biggestStatement = database.prepare(biggestSql);
+  const anonymousKey = donorNameKey(anonymousDonorName);
 
   return {
     /** Highest totals per donor name, at most `limit` rows. */
     topDonors(currency: string, limit: number): TopDonor[] {
-      const rows = topDonorsStatement.all({
-        currency,
-        anonymousKey: donorNameKey(anonymousDonorName),
-        limit: clampLimit(limit),
-      }) as {
+      const rows = topDonorsStatement.all({ currency, anonymousKey, limit: clampLimit(limit) }) as {
         donor_name: string;
         total_minor: number;
         donation_count: number;
@@ -116,18 +116,18 @@ export function createLeaderboardQueries(database: Database) {
       }));
     },
 
-    /** Largest single counted donations, at most `limit` rows. Anonymous included. */
+    /** Largest single counted donations, at most `limit` rows. */
     biggest(currency: string, limit: number): BigDonation[] {
-      const rows = biggestStatement.all({ currency, limit: clampLimit(limit) }) as {
+      const rows = biggestStatement.all({ currency, anonymousKey, limit: clampLimit(limit) }) as {
         donor_name: string;
         amount_minor: number;
       }[];
       return rows.map((row) => ({ donorName: row.donor_name, amountMinor: row.amount_minor }));
     },
 
-    /** Latest counted donations, newest first, at most `limit` rows. Anonymous included. */
+    /** Latest counted donations, newest first, at most `limit` rows. */
     recent(currency: string, limit: number): RecentDonation[] {
-      const rows = recentStatement.all({ currency, limit: clampLimit(limit) }) as {
+      const rows = recentStatement.all({ currency, anonymousKey, limit: clampLimit(limit) }) as {
         donor_name: string;
         amount_minor: number;
         alert_triggered_at: string;
