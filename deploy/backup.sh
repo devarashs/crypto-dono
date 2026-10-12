@@ -18,14 +18,26 @@ snapshot="data/backup-$stamp.sqlite"
 
 mkdir -p "$backup_dir"
 
+# Runs a command beside the database: inside the app container while it is up,
+# otherwise in a one-off container on the same volume. The second case matters:
+# when the app is crash-looping, an update that fixes it must still be able to
+# take its backup first.
+in_app() {
+  if docker compose exec -T crypto-dono true >/dev/null 2>&1; then
+    docker compose exec -T crypto-dono "$@"
+  else
+    docker compose run --rm --no-deps -T crypto-dono "$@"
+  fi
+}
+
 # Remove the in-container snapshot however the script ends, so a failed copy
 # never leaves stray copies of the database filling the data volume.
 cleanup() {
-  docker compose exec -T crypto-dono rm -f "$snapshot" || true
+  in_app rm -f "$snapshot" || true
 }
 trap cleanup EXIT
 
-docker compose exec -T crypto-dono node -e "
+in_app node -e "
   const { DatabaseSync } = require('node:sqlite');
   const database = new DatabaseSync('data/crypto-dono.sqlite');
   database.exec(\"VACUUM INTO '$snapshot'\");
