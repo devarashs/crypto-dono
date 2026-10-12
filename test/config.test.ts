@@ -45,6 +45,7 @@ describe('loadConfig', () => {
       },
       socialLinks: [],
       twitch: null,
+      kick: null,
       leaderboardEnabled: true,
       adminPassword: null,
       filters: { messageMaxLength: 300, bannedWords: [], messageMinAmountMinor: 0, speechMinAmountMinor: 0 },
@@ -395,6 +396,29 @@ describe('loadConfig', () => {
       expect(
         configErrorFor({ ...minimalEnvironment, TWITCH_CLIENT_ID: '...', TWITCH_CLIENT_SECRET: 'x' }).issues[0],
       ).toMatch(/^TWITCH_CLIENT_ID: should be the Client ID/);
+    });
+  });
+
+  describe('Kick credentials', () => {
+    it('reads both together', () => {
+      expect(
+        loadConfig({ ...minimalEnvironment, KICK_CLIENT_ID: '01JX1ABCDEF', KICK_CLIENT_SECRET: 'kick-secret' }).kick,
+      ).toEqual({ clientId: '01JX1ABCDEF', clientSecret: 'kick-secret' });
+    });
+
+    it.each([
+      ['only the id', { KICK_CLIENT_ID: '01JX1ABCDEF' }],
+      ['only the secret', { KICK_CLIENT_SECRET: 'kick-secret' }],
+    ])('rejects %s', (_label, overrides) => {
+      expect(configErrorFor({ ...minimalEnvironment, ...overrides }).issues).toEqual([
+        'KICK_CLIENT_ID and KICK_CLIENT_SECRET: set both, or neither',
+      ]);
+    });
+
+    it('rejects a placeholder client id', () => {
+      expect(configErrorFor({ ...minimalEnvironment, KICK_CLIENT_ID: '...', KICK_CLIENT_SECRET: 'x' }).issues[0]).toMatch(
+        /^KICK_CLIENT_ID: should be the Client ID/,
+      );
     });
   });
 
