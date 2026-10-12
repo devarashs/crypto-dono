@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createAlertPresenter,
   donationToAlertSource,
+  soundboardSoundLimitMs,
   type AlertFilterRules,
   type AlertSource,
 } from '../src/alerts/alert-presenter.ts';
@@ -121,6 +122,7 @@ describe('donationToAlertSource', () => {
       message: 'gg',
       amountMinor: 123456,
       currency: 'usd',
+      sound: null,
       nowpaymentsPaymentId: 'not for overlays',
     } as Donation;
     expect(donationToAlertSource(donation)).toEqual({
@@ -130,5 +132,50 @@ describe('donationToAlertSource', () => {
       amountMinor: 123456,
       currency: 'usd',
     });
+  });
+
+  it('carries the sound a soundboard purchase paid for', () => {
+    const donation = { publicId: 'p2', donorName: 'Bo', message: '', amountMinor: 250, currency: 'usd', sound: { id: 'airhorn', name: 'Air horn' } } as Donation;
+    expect(donationToAlertSource(donation)).toMatchObject({ id: 'p2', sound: { id: 'airhorn', name: 'Air horn' } });
+  });
+});
+
+describe('soundboard purchases', () => {
+  const purchase: AlertSource = { id: 's1', donorName: 'NeonRider', message: '', amountMinor: 250, currency: 'usd', sound: { id: 'airhorn', name: 'Air horn' } };
+  const rules: AlertFilterRules = { ...noFilters, soundboardPath: (id) => (id === 'airhorn' ? '/sounds/airhorn/audio' : null) };
+
+  it('says who played which sound, plays its file within the limit, and never speaks', () => {
+    expect(createAlertPresenter(rules)(purchase)).toEqual({
+      alert: {
+        id: 's1',
+        donorName: 'NeonRider',
+        message: '',
+        amount: '$2.50',
+        speak: false,
+        kind: 'sound',
+        headline: [
+          { text: 'NeonRider played ', emphasis: false },
+          { text: 'Air horn', emphasis: true },
+        ],
+        badge: { label: 'Soundboard', iconPath: expect.any(String) },
+        sound: { type: 'file', path: '/sounds/airhorn/audio' },
+        soundLimitMs: soundboardSoundLimitMs,
+      },
+      speechText: null,
+    });
+    expect(soundboardSoundLimitMs).toBe(20_000);
+  });
+
+  it('masks a banned word in the buyer name', () => {
+    const alert = createAlertPresenter({ ...rules, bannedWords: ['neonrider'] })(purchase).alert;
+    expect(alert.donorName).toBe('*********');
+    expect(alert.headline?.[0]?.text).toBe('********* played ');
+  });
+
+  it('falls back to the usual alert sound once the sound is no longer listed', () => {
+    const alert = createAlertPresenter(rules)({ ...purchase, sound: { id: 'removed', name: 'Old sound' } }).alert;
+    expect(alert.headline?.[1]?.text).toBe('Old sound');
+    expect(alert.sound).toBeUndefined();
+    expect(alert.soundLimitMs).toBeUndefined();
   });
 });

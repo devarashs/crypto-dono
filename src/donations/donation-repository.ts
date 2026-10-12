@@ -40,9 +40,13 @@ export type Donation = {
   readonly alertShownAt: string | null;
   /** False when the donor opted out of the public leaderboard. */
   readonly showOnLeaderboard: boolean;
+  /** The soundboard sound this donation paid for, as listed then; `null` for a plain donation. */
+  readonly sound: PurchasedSound | null;
   readonly createdAt: string;
   readonly updatedAt: string;
 };
+
+export type PurchasedSound = { readonly id: string; readonly name: string };
 
 /** The payment facts carried by one NOWPayments IPN. */
 export type PaymentUpdate = {
@@ -68,6 +72,8 @@ export type NewDonation = {
   readonly currency: string;
   /** Defaults to true, matching donations made before the leaderboard existed. */
   readonly showOnLeaderboard?: boolean;
+  /** Set for a soundboard purchase. */
+  readonly sound?: PurchasedSound;
 };
 
 type DonationRow = {
@@ -85,6 +91,8 @@ type DonationRow = {
   alert_triggered_at: string | null;
   alert_shown_at: string | null;
   show_on_leaderboard: number;
+  sound_id: string | null;
+  sound_name: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -98,8 +106,8 @@ export type DonationRepository = ReturnType<typeof createDonationRepository>;
 export function createDonationRepository(database: Database, now: () => Date = () => new Date()) {
   const insertStatement = database.prepare(`
     INSERT INTO donations (public_id, donor_name, donor_name_key, message, amount_minor, currency,
-                           show_on_leaderboard, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                           show_on_leaderboard, sound_id, sound_name, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING *
   `);
   const findByPublicIdStatement = database.prepare('SELECT * FROM donations WHERE public_id = ?');
@@ -151,6 +159,8 @@ export function createDonationRepository(database: Database, now: () => Date = (
         donation.amountMinor,
         donation.currency,
         donation.showOnLeaderboard === false ? 0 : 1,
+        donation.sound?.id ?? null,
+        donation.sound?.name ?? null,
         timestamp,
         timestamp,
       ) as DonationRow;
@@ -287,6 +297,7 @@ function toDonation(row: DonationRow): Donation {
     alertTriggeredAt: row.alert_triggered_at,
     alertShownAt: row.alert_shown_at,
     showOnLeaderboard: row.show_on_leaderboard === 1,
+    sound: row.sound_id === null || row.sound_name === null ? null : { id: row.sound_id, name: row.sound_name },
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

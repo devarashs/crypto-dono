@@ -202,6 +202,18 @@ with the `EVENT_*` settings in `.env.example`. If Twitch stops sending events
 (for example after you change your password), the admin page says so and offers
 **Reconnect Twitch**.
 
+## Soundboard
+
+Viewers can pay to play a sound from a list you choose. Put the sound files in
+the `custom` folder with a `soundboard.json` listing them (name, price and
+file; see [custom/README.md](custom/README.md)), then restart. The page is at
+`/sounds`, linked from the donation page.
+
+Viewers pay exactly the listed price. Once paid, the overlay shows "NeonRider
+played Air horn" and plays that file instead of the alert sound, for up to 20
+seconds. Purchases count as donations on the leaderboard and the on-stream
+table. The test-alert page has a button for each sound.
+
 ## Choosing when alerts fire
 
 `ALERT_ON_STATUS` sets how far a payment must get before its alert shows:

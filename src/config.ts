@@ -5,7 +5,7 @@
  * with a message naming the variable, rather than at the first donation. The
  * documented list of variables lives in `.env.example`; keep the two in sync.
  */
-import { statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { extname, resolve } from 'node:path';
 import { z } from 'zod';
 import { alertThresholdStatuses, type AlertThresholdStatus } from './donations/payment-status.ts';
@@ -16,6 +16,7 @@ import {
   type SwitchableEventKind,
 } from './events/stream-event.ts';
 import { currencyFractionDigits, parseAmountToMinorUnits } from './money.ts';
+import { parseSoundboard, type Sound } from './soundboard/soundboard.ts';
 import { socialIcons } from './web/social-icons.ts';
 import { nowPaymentsBaseUrls } from './nowpayments/nowpayments-client.ts';
 
@@ -207,6 +208,21 @@ const fileExistsOnDisk: FileExists = (path) => {
   }
 };
 
+/** Reads a text file, or returns `undefined` when there is none. Injected like FileExists. */
+export type ReadTextFile = (path: string) => string | undefined;
+
+const readTextFileFromDisk: ReadTextFile = (path) => {
+  try {
+    return readFileSync(path, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw error;
+  }
+};
+
+/** The soundboard is on exactly when this file exists in CUSTOM_ASSETS_DIR. */
+export const soundboardFileName = 'soundboard.json';
+
 export type AlertSound =
   | { readonly kind: 'chime' }
   | { readonly kind: 'none' }
@@ -265,6 +281,8 @@ export type Config = {
     /** "chime" here means the kind's own built-in tone. */
     readonly sounds: Readonly<Record<SwitchableEventKind, AlertSound>>;
   };
+  /** Sounds viewers can pay to play, or `null` when there is no soundboard file. */
+  readonly soundboard: readonly Sound[] | null;
   /** Text-to-speech, or `null` when TTS_URL is not set. */
   readonly tts: {
     /** Piper server origin without a trailing slash. */
@@ -296,6 +314,7 @@ export type Config = {
 export function loadConfig(
   environment: Readonly<Record<string, string | undefined>>,
   fileExists: FileExists = fileExistsOnDisk,
+  readTextFile: ReadTextFile = readTextFileFromDisk,
 ): Config {
   const parsed = environmentSchema.safeParse(environment);
   if (!parsed.success) {
@@ -384,6 +403,17 @@ export function loadConfig(
     cheer: variables.EVENT_TEMPLATE_CHEER,
     raid: variables.EVENT_TEMPLATE_RAID,
   };
+  let soundboard: readonly Sound[] | null = null;
+  const soundboardText = readTextFile(resolve(assetsDirectory, soundboardFileName));
+  if (soundboardText !== undefined && minAmountMinor !== undefined && maxAmountMinor !== undefined) {
+    const parsedSoundboard = parseSoundboard(soundboardText, { fractionDigits, minAmountMinor, maxAmountMinor });
+    for (const issue of parsedSoundboard.issues) secondPassIssues.push(`${soundboardFileName}: ${issue}`);
+    for (const sound of parsedSoundboard.sounds) {
+      checkAsset(`${soundboardFileName}: sound "${sound.id}" file`, sound.fileName, soundExtensions);
+    }
+    soundboard = parsedSoundboard.sounds;
+  }
+
   const enabledEvents = new Set<SwitchableEventKind>();
   const eventList = variables.EVENT_ALERTS.trim().toLowerCase();
   if (eventList !== 'none') {
@@ -444,6 +474,7 @@ export function loadConfig(
       templates: eventTemplates,
       sounds: eventSounds,
     },
+    soundboard,
     tts: variables.TTS_URL === undefined ? null : { url: variables.TTS_URL, template: variables.TTS_TEMPLATE },
     donation: {
       currency: variables.DONATION_CURRENCY,

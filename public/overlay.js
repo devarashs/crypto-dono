@@ -75,7 +75,8 @@ async function showAlert(alert) {
   void card.offsetWidth;
   card.classList.add('is-visible');
   const shownAt = performance.now();
-  playAlertSound(alert);
+  /** The audio element playing, when it is a file (null for tones and silence). */
+  const sound = playAlertSound(alert);
   // The server decides per alert (e.g. below TTS_MIN_AMOUNT it is not spoken).
   const spoken = speechEnabled && alert.speak === true;
   if (spoken) {
@@ -89,6 +90,11 @@ async function showAlert(alert) {
     const visibleMs = Math.max(alert.durationMs ?? alertDurationMs, spoken ? elapsedMs + holdAfterSpeechMs : 0);
     await waitUnlessSkipped(visibleMs - elapsedMs);
   }
+  // A soundboard sound is the alert itself: stay up until it finishes, within its limit.
+  if (!wasSkipped && alert.soundLimitMs !== undefined && sound !== null) {
+    await Promise.race([untilEnded(sound), wait(alert.soundLimitMs - (performance.now() - shownAt)), skipped]);
+  }
+  if (alert.soundLimitMs !== undefined && sound !== null) sound.pause();
   current = null;
   card.classList.remove('is-visible');
   await wait(exitDurationMs);
@@ -191,34 +197,49 @@ let customSound;
 /** Custom event sounds, one element per file so each is fetched once. */
 const eventSounds = new Map();
 
+/** @returns The audio element playing a sound file, or null for a tone or silence. */
 function playAlertSound(alert) {
-  if (alert.sound !== undefined) {
-    playEventSound(alert.sound);
-    return;
-  }
-  if (soundSetting === 'none') return;
+  if (alert.sound !== undefined) return playEventSound(alert.sound);
+  if (soundSetting === 'none') return null;
   if (soundSetting === 'chime') {
     playChime();
-    return;
+    return null;
   }
   // One element reused, so the file is fetched once and then served from cache.
   customSound ??= new Audio(new URL(soundSetting, window.location.href).href);
   customSound.currentTime = 0;
   // Rejected when the browser blocks autoplay; OBS does not, a normal tab may.
   customSound.play().catch(() => {});
+  return customSound;
 }
 
+/** @returns The audio element for a file cue, or null for a tone or silence. */
 function playEventSound(cue) {
-  if (cue.type === 'none') return;
+  if (cue.type === 'none') return null;
   if (cue.type === 'tone') {
     playTone(cue.tone);
-    return;
+    return null;
   }
   const url = new URL(cue.path, eventsUrl).href;
   if (!eventSounds.has(url)) eventSounds.set(url, new Audio(url));
   const sound = eventSounds.get(url);
   sound.currentTime = 0;
   sound.play().catch(() => {});
+  return sound;
+}
+
+/**
+ * Resolves when the sound finishes or fails; a broken file must not hold up the
+ * queue. Already paused covers both "finished" and "never started" (autoplay
+ * blocked in a normal browser tab).
+ */
+function untilEnded(audio) {
+  if (audio.paused || audio.ended || audio.error !== null) return Promise.resolve();
+  return new Promise((resolve) => {
+    audio.addEventListener('ended', resolve, { once: true });
+    audio.addEventListener('error', resolve, { once: true });
+    audio.addEventListener('pause', resolve, { once: true });
+  });
 }
 
 /**

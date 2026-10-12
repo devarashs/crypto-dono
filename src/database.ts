@@ -140,6 +140,17 @@ export const migrations: readonly Migration[] = [
       CREATE INDEX twitch_messages_received_at ON twitch_messages (received_at);
     `,
   },
+  {
+    version: 7,
+    description: 'Soundboard purchases',
+    sql: `
+      -- The sound a viewer paid to play, as listed at the time of purchase, so
+      -- renaming or removing a sound later does not rewrite history. Both NULL
+      -- for an ordinary donation. The price paid is amount_minor, as always.
+      ALTER TABLE donations ADD COLUMN sound_id TEXT;
+      ALTER TABLE donations ADD COLUMN sound_name TEXT;
+    `,
+  },
 ];
 
 /** The schema version a freshly opened database ends up at. */

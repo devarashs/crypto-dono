@@ -67,6 +67,7 @@ describe('loadConfig', () => {
           raid: { kind: 'chime' },
         },
       },
+      soundboard: null,
       tts: null,
       donation: {
         currency: 'usd',
@@ -490,6 +491,63 @@ describe('loadConfig', () => {
 
     it.each(['piper:5000', 'ftp://piper', 'not a url'])('rejects TTS_URL=%s', (url) => {
       expect(configErrorFor({ ...minimalEnvironment, TTS_URL: url }).issues[0]).toMatch(/^TTS_URL: /);
+    });
+  });
+
+  describe('soundboard', () => {
+    const soundboardPath = resolve('custom', 'soundboard.json');
+    const load = (files: Record<string, string>, existing: readonly string[], overrides: Record<string, string> = {}) =>
+      loadConfig(
+        { ...minimalEnvironment, ...overrides },
+        (path) => existing.map((name) => resolve('custom', name)).includes(path),
+        (path) => files[path],
+      );
+    const issuesFor = (...args: Parameters<typeof load>) => {
+      try {
+        load(...args);
+      } catch (error) {
+        if (error instanceof ConfigError) return error.issues;
+        throw error;
+      }
+      throw new Error('expected a ConfigError');
+    };
+
+    it('is off without a soundboard.json', () => {
+      expect(load({}, []).soundboard).toBeNull();
+    });
+
+    it('reads the sounds from soundboard.json in CUSTOM_ASSETS_DIR', () => {
+      const json = JSON.stringify([{ id: 'airhorn', name: 'Air horn', price: '2.50', file: 'airhorn.mp3' }]);
+      expect(load({ [soundboardPath]: json }, ['airhorn.mp3']).soundboard).toEqual([
+        { id: 'airhorn', name: 'Air horn', priceMinor: 250, fileName: 'airhorn.mp3' },
+      ]);
+    });
+
+    it('prices sounds in the donation currency and its range', () => {
+      const json = JSON.stringify([{ id: 'horn', name: 'Horn', price: 300, file: 'horn.mp3' }]);
+      expect(load({ [soundboardPath]: json }, ['horn.mp3'], { DONATION_CURRENCY: 'jpy', DONATION_MIN_AMOUNT: '100', DONATION_MAX_AMOUNT: '5000' }).soundboard).toEqual([
+        { id: 'horn', name: 'Horn', priceMinor: 300, fileName: 'horn.mp3' },
+      ]);
+    });
+
+    it('refuses to start over a missing, misnamed or non-audio file, naming the sound', () => {
+      const json = JSON.stringify([
+        { id: 'gone', name: 'Gone', price: 2, file: 'gone.mp3' },
+        { id: 'escape', name: 'Escape', price: 2, file: '../secret.mp3' },
+        { id: 'picture', name: 'Picture', price: 2, file: 'cat.png' },
+      ]);
+      expect(issuesFor({ [soundboardPath]: json }, ['cat.png'])).toEqual([
+        `soundboard.json: sound "gone" file: no file named "gone.mp3" in ${resolve('custom')}`,
+        'soundboard.json: sound "escape" file: must be a plain file name inside CUSTOM_ASSETS_DIR, without folders',
+        'soundboard.json: sound "picture" file: must end in one of .mp3, .ogg, .wav, .m4a',
+      ]);
+    });
+
+    it('reports a broken file alongside other configuration problems', () => {
+      expect(issuesFor({ [soundboardPath]: '[]' }, [], { ALERT_DURATION_SECONDS: '12', SOCIAL_LINKS: 'nope' })).toEqual([
+        expect.stringMatching(/^SOCIAL_LINKS: /),
+        'soundboard.json: lists no sounds; delete the file to turn the soundboard off',
+      ]);
     });
   });
 

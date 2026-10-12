@@ -17,3 +17,28 @@ ALERT_IMAGE=party.gif
 
 Only the two files named in `.env` are ever served, and only through the secret
 overlay URL. Everything else in this folder stays private, and git ignores it.
+
+## Soundboard
+
+Viewers can pay to play a sound on stream. To turn it on, put the sound files
+here and list them in `soundboard.json` in this folder:
+
+```json
+[
+  { "id": "airhorn", "name": "Air horn", "price": "2.50", "file": "airhorn.mp3" },
+  { "id": "bruh", "name": "Bruh", "price": 1, "file": "bruh.ogg" }
+]
+```
+
+- `id`: lower-case letters, digits and dashes, up to 32. It appears in links
+  and is saved with each purchase, so keep it once people have bought the sound.
+- `name`: what viewers see, up to 40 characters.
+- `price`: in `DONATION_CURRENCY`, between `DONATION_MIN_AMOUNT` and
+  `DONATION_MAX_AMOUNT`. Viewers pay exactly this.
+- `file`: a sound file in this folder (`.mp3`, `.ogg`, `.wav` or `.m4a`).
+  Level the volume of your clips before adding them.
+- Up to 50 sounds.
+
+Listed sound files are public, so viewers can preview them before paying.
+Without `soundboard.json` there is no soundboard. The service checks the file
+at startup and refuses to start if it has a problem, naming the sound.

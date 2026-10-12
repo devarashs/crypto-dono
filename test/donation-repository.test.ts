@@ -27,9 +27,16 @@ describe('donation repository', () => {
       nowpaymentsPaymentId: null,
       payCurrency: null,
       actuallyPaid: null,
+      sound: null,
       createdAt: fixedNow.toISOString(),
       updatedAt: fixedNow.toISOString(),
     });
+  });
+
+  it('records the sound a soundboard purchase paid for, as it was named then', () => {
+    const created = repository.create({ ...newDonation, message: '', sound: { id: 'airhorn', name: 'Air horn' } });
+    expect(created.sound).toEqual({ id: 'airhorn', name: 'Air horn' });
+    expect(repository.findByPublicId(created.publicId)?.sound).toEqual({ id: 'airhorn', name: 'Air horn' });
   });
 
   it('gives each donation a distinct, URL-safe 128-bit public id', () => {
