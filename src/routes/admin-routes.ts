@@ -7,6 +7,9 @@
  *   GET  /admin                           donation history (?before=<id>&all=1)
  *   POST /admin/donations/:id/replay      show a donation's alert again
  *   POST /admin/donations/:id/skip        drop a pending alert, also from live overlays
+ *   GET  /admin/{twitch,kick}/connect     start linking a channel (redirects to the platform)
+ *   GET  /admin/{twitch,kick}/callback    where the platform sends the streamer back
+ *   POST /admin/{twitch,kick}/disconnect  unlink the channel and stop its alerts
  *
  * Sessions are @fastify/session's, kept in memory: a restart signs the admin
  * out, which is acceptable for one person and avoids a session store. The
@@ -23,7 +26,10 @@ import { isCorrectAdminPassword } from '../admin/admin-auth.ts';
 import type { ConnectionStore } from '../platforms/connection-store.ts';
 import type { TwitchApi } from '../twitch/twitch-api.ts';
 import { connectTwitch, disconnectTwitch } from '../twitch/twitch-connection.ts';
-import type { TwitchStatus } from '../web/admin-pages.ts';
+import { createPkcePair, type KickApi } from '../kick/kick-api.ts';
+import { connectKick, disconnectKick } from '../kick/kick-connection.ts';
+import type { ConnectablePlatform } from '../platforms/connection-store.ts';
+import type { PlatformStatus } from '../web/admin-pages.ts';
 import type { AlertHub } from '../alerts/alert-hub.ts';
 import { donationToAlertSource, type AlertPresenter, type PresentedAlert } from '../alerts/alert-presenter.ts';
 import type { Config } from '../config.ts';
@@ -53,10 +59,12 @@ export type AdminRouteDependencies = {
     /** Absolute URL of this server's EventSub webhook. */
     readonly callbackUrl: string;
   };
+  /** Present when KICK_CLIENT_ID and KICK_CLIENT_SECRET are set. */
+  readonly kick?: { readonly api: KickApi };
   readonly now?: () => number;
 };
 
-/** How long a "Connect Twitch" click stays valid while the streamer is on twitch.tv. */
+/** How long a Connect click stays valid while the streamer is on the platform's site. */
 const oauthStateLifetimeMs = 10 * 60 * 1000;
 
 const sessionLifetimeMs = 12 * 60 * 60 * 1000;
@@ -74,12 +82,19 @@ const notices: Readonly<Record<string, string>> = {
   'twitch-failed': 'Twitch could not be reached or refused the request. Check the server log and try again.',
   'twitch-expired': 'That Twitch sign-in took too long or was already used. Click Connect Twitch again.',
   'twitch-disconnected': 'Twitch disconnected. Its alerts have stopped.',
+  'kick-connected': 'Kick connected. Follows, subs and Kicks will alert on stream.',
+  'kick-partial': 'Kick connected, but some event types were refused. Check the server log, then reconnect.',
+  'kick-denied': 'Kick access was not granted, so nothing changed.',
+  'kick-failed': 'Kick could not be reached or refused the request. Check the server log and try again.',
+  'kick-expired': 'That Kick sign-in took too long or was already used. Click Connect Kick again.',
+  'kick-disconnected': 'Kick disconnected. Its alerts have stopped.',
 };
 
 export function registerAdminRoutes(app: FastifyInstance, dependencies: AdminRouteDependencies): void {
-  const { config, donations, alertHub, presentAlert, publishAlert, connections, twitch } = dependencies;
+  const { config, donations, alertHub, presentAlert, publishAlert, connections, twitch, kick } = dependencies;
   const now = dependencies.now ?? Date.now;
   const twitchRedirectUri = `${config.publicBaseUrl}/admin/twitch/callback`;
+  const kickRedirectUri = `${config.publicBaseUrl}/admin/kick/callback`;
 
   /**
    * One-time values linking a "Connect Twitch" click to Twitch's redirect back.
@@ -93,9 +108,22 @@ export function registerAdminRoutes(app: FastifyInstance, dependencies: AdminRou
     return true;
   }
 
-  function twitchStatus(): TwitchStatus {
-    if (twitch === undefined) return { state: 'not-configured' };
-    const connection = connections.find('twitch');
+  /**
+   * Kick's sign-in uses PKCE: each Connect click gets a verifier that only this
+   * server knows, kept with its state until Kick sends the streamer back.
+   */
+  const pendingKickStates = new Map<string, { expiresAt: number; codeVerifier: string }>();
+  function takeKickVerifier(state: string | undefined): string | undefined {
+    for (const [key, pending] of pendingKickStates) if (pending.expiresAt < now()) pendingKickStates.delete(key);
+    if (state === undefined) return undefined;
+    const pending = pendingKickStates.get(state);
+    pendingKickStates.delete(state);
+    return pending?.codeVerifier;
+  }
+
+  function platformStatus(platform: ConnectablePlatform, configured: boolean): PlatformStatus {
+    if (!configured) return { state: 'not-configured' };
+    const connection = connections.find(platform);
     if (connection === undefined) return { state: 'disconnected' };
     return connection.status === 'active'
       ? { state: 'connected', login: connection.accountLogin }
@@ -178,7 +206,8 @@ export function registerAdminRoutes(app: FastifyInstance, dependencies: AdminRou
             (scene) => `${config.publicBaseUrl}${overlayPath}/scene/${scene}`,
           ),
           testAlertUrl: `${overlayPath}/test`,
-          twitch: twitchStatus(),
+          twitch: platformStatus('twitch', twitch !== undefined),
+          kick: platformStatus('kick', kick !== undefined),
           ...(notice !== undefined && { notice }),
         }),
       );
@@ -228,6 +257,47 @@ export function registerAdminRoutes(app: FastifyInstance, dependencies: AdminRou
       } catch (error) {
         request.log.error({ err: error }, 'Disconnecting Twitch failed');
         return reply.redirect('/admin?notice=twitch-failed', 303);
+      }
+    });
+  }
+
+  if (kick !== undefined) {
+    const kickDependencies = { api: kick.api, connections };
+
+    app.get('/admin/kick/connect', { preHandler: requireAdmin }, async (_request, reply) => {
+      const state = randomBytes(24).toString('base64url');
+      const pkce = createPkcePair();
+      pendingKickStates.set(state, { expiresAt: now() + oauthStateLifetimeMs, codeVerifier: pkce.verifier });
+      return reply.redirect(kick.api.authorizeUrl(kickRedirectUri, state, pkce.challenge), 303);
+    });
+
+    // No admin session check, as for Twitch: the single-use state is the proof.
+    app.get<{ Querystring: { code?: string; state?: string; error?: string } }>(
+      '/admin/kick/callback',
+      async (request, reply) => {
+        const codeVerifier = takeKickVerifier(request.query.state);
+        if (codeVerifier === undefined) return reply.redirect('/admin?notice=kick-expired', 303);
+        if (request.query.error !== undefined || request.query.code === undefined) {
+          return reply.redirect('/admin?notice=kick-denied', 303);
+        }
+        try {
+          const result = await connectKick(kickDependencies, request.query.code, kickRedirectUri, codeVerifier);
+          request.log.info({ login: result.login, failedEvents: result.failedEvents }, 'Kick connected');
+          return reply.redirect(`/admin?notice=${result.failedEvents.length === 0 ? 'kick-connected' : 'kick-partial'}`, 303);
+        } catch (error) {
+          request.log.error({ err: error }, 'Connecting Kick failed');
+          return reply.redirect('/admin?notice=kick-failed', 303);
+        }
+      },
+    );
+
+    app.post('/admin/kick/disconnect', { preHandler: requireAdmin }, async (request, reply) => {
+      try {
+        await disconnectKick(kickDependencies);
+        return reply.redirect('/admin?notice=kick-disconnected', 303);
+      } catch (error) {
+        request.log.error({ err: error }, 'Disconnecting Kick failed');
+        return reply.redirect('/admin?notice=kick-failed', 303);
       }
     });
   }

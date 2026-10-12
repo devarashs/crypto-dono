@@ -21,6 +21,7 @@ import type { LeaderboardQueries } from './donations/leaderboard.ts';
 import type { ConnectionStore } from './platforms/connection-store.ts';
 import { registerTwitchWebhookRoutes, twitchWebhookPath } from './routes/twitch-webhook-routes.ts';
 import type { TwitchApi } from './twitch/twitch-api.ts';
+import type { KickApi } from './kick/kick-api.ts';
 import type { KickPublicKeySource } from './kick/kick-public-key.ts';
 import { registerKickWebhookRoutes } from './routes/kick-webhook-routes.ts';
 import type { NowPaymentsClient } from './nowpayments/nowpayments-client.ts';
@@ -42,8 +43,8 @@ export type AppDependencies = {
   readonly connections: ConnectionStore;
   /** Present when Twitch is configured: its API client and the EventSub signing secret. */
   readonly twitch?: { readonly api: TwitchApi; readonly eventSubSecret: string };
-  /** Present when Kick is configured: where Kick's webhook signing key comes from. */
-  readonly kick?: { readonly publicKey: KickPublicKeySource };
+  /** Present when Kick is configured: its API client and where its signing key comes from. */
+  readonly kick?: { readonly api: KickApi; readonly publicKey: KickPublicKeySource };
   readonly nowPayments: NowPaymentsClient;
   /** Receives each donation's alert once, and fans it out to connected overlays. */
   readonly alertHub: AlertHub;
@@ -231,6 +232,7 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
         ...(twitch !== undefined && {
           twitch: { ...twitch, callbackUrl: `${config.publicBaseUrl}${twitchWebhookPath}` },
         }),
+        ...(kick !== undefined && { kick: { api: kick.api } }),
       });
     });
   }

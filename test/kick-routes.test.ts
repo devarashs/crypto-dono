@@ -1,9 +1,11 @@
 import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
-import type { FastifyInstance } from 'fastify';
-import { afterEach, describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
+import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createAlertHub, type OverlayAlert } from '../src/alerts/alert-hub.ts';
 import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
+import type { KickApi } from '../src/kick/kick-api.ts';
 import type { KickPublicKeySource } from '../src/kick/kick-public-key.ts';
 import { createInMemoryStore } from './support/in-memory-store.ts';
 
@@ -16,7 +18,21 @@ type Context = {
   store: ReturnType<typeof createInMemoryStore>;
   published: OverlayAlert[];
   keyFetches: { current: number; refresh: number };
+  api: { [K in keyof KickApi]: ReturnType<typeof vi.fn> };
 };
+
+const password = 'correct horse battery staple';
+
+function fakeKickApi(): Context['api'] {
+  return {
+    authorizeUrl: vi.fn((redirectUri: string, state: string, challenge: string) =>
+      `https://id.kick.com/oauth/authorize?state=${state}&code_challenge=${challenge}&redirect_uri=${redirectUri}`),
+    identifyStreamer: vi.fn(async () => ({ id: broadcasterId, login: 'machinearash', userToken: 'user-token' })),
+    subscribe: vi.fn(async () => [{ event: 'channel.followed' }]),
+    listSubscriptions: vi.fn(async () => []),
+    deleteSubscriptions: vi.fn(async () => {}),
+  };
+}
 
 /**
  * @param servedKeys What Kick's key endpoint returns: the first on startup, the
@@ -30,6 +46,7 @@ function build(servedKeys: readonly string[] = [pemOf(pairs[0]!.publicKey)], env
     OVERLAY_TOKEN: 'overlay-token-for-tests-0123456789',
     LOG_LEVEL: 'fatal',
     ...(withKick && { KICK_CLIENT_ID: '01JXCLIENT', KICK_CLIENT_SECRET: 'kick-secret' }),
+    ADMIN_PASSWORD: password,
     ...environment,
   });
   const store = createInMemoryStore();
@@ -41,15 +58,17 @@ function build(servedKeys: readonly string[] = [pemOf(pairs[0]!.publicKey)], env
     current: async () => (keyFetches.current++, servedKeys[0]!),
     refresh: async () => (keyFetches.refresh++, servedKeys[1] ?? null),
   };
+  const api = fakeKickApi();
   const app = buildApp(config, {
     donations: store.donations,
     leaderboard: store.leaderboard,
     connections: store.connections,
     nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
     alertHub,
-    ...(withKick && { kick: { publicKey } }),
+    adminSessionSecret: 'a'.repeat(64),
+    ...(withKick && { kick: { api: api as unknown as KickApi, publicKey } }),
   });
-  return { app, store, published, keyFetches };
+  return { app, store, published, keyFetches, api };
 }
 
 /** A webhook signed exactly as Kick's docs describe. */
@@ -178,7 +197,7 @@ describe('Kick webhook', () => {
           connections: store.connections,
           nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
           alertHub: createAlertHub(),
-          kick: { publicKey: failing },
+          kick: { api: fakeKickApi() as unknown as KickApi, publicKey: failing },
         },
       ),
     };
@@ -205,5 +224,100 @@ describe('Kick webhook', () => {
   it('does not exist when Kick is not configured', async () => {
     context = build(undefined, {}, false);
     expect((await deliver(context, 'channel.followed', follow())).statusCode).toBe(404);
+  });
+});
+
+async function signIn(app: FastifyInstance): Promise<string> {
+  const response = await app.inject({
+    method: 'POST',
+    url: '/admin/login',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    payload: new URLSearchParams({ password }).toString(),
+  });
+  const cookie = response.cookies.find((candidate) => candidate.name === 'crypto_dono_admin')!;
+  return `${cookie.name}=${cookie.value}`;
+}
+
+const queryFrom = (response: LightMyRequestResponse) => new URL(response.headers.location as string).searchParams;
+
+describe('Kick admin connection', () => {
+  let context: Context | undefined;
+  afterEach(async () => {
+    await context?.app.close();
+    context = undefined;
+  });
+
+  it('explains how to enable Kick when it is not configured', async () => {
+    context = build(undefined, {}, false);
+    const cookie = await signIn(context.app);
+    const page = await context.app.inject({ method: 'GET', url: '/admin', headers: { cookie } });
+    expect(page.body).toContain('Set KICK_CLIENT_ID and KICK_CLIENT_SECRET in .env to show follows, subs and Kicks.');
+    expect((await context.app.inject({ method: 'GET', url: '/admin/kick/connect', headers: { cookie } })).statusCode).toBe(404);
+  });
+
+  it('requires an admin session to start connecting', async () => {
+    context = build();
+    expect((await context.app.inject({ method: 'GET', url: '/admin/kick/connect' })).headers.location).toBe('/admin/login');
+  });
+
+  it('connects with PKCE: the verifier for this state goes back to Kick, and only once', async () => {
+    context = build();
+    const cookie = await signIn(context.app);
+    expect((await context.app.inject({ method: 'GET', url: '/admin', headers: { cookie } })).body).toContain('Connect Kick');
+
+    const start = await context.app.inject({ method: 'GET', url: '/admin/kick/connect', headers: { cookie } });
+    expect(start.statusCode).toBe(303);
+    const state = queryFrom(start).get('state')!;
+    const challenge = queryFrom(start).get('code_challenge')!;
+    expect(context.api.authorizeUrl).toHaveBeenCalledWith('https://dono.example.com/admin/kick/callback', state, challenge);
+
+    // Back from kick.com, without the admin cookie.
+    const back = await context.app.inject({ method: 'GET', url: `/admin/kick/callback?code=abc&state=${state}` });
+    expect(back.headers.location).toBe('/admin?notice=kick-connected');
+    const verifier = context.api.identifyStreamer.mock.calls[0]![2] as string;
+    expect(createHash('sha256').update(verifier).digest('base64url')).toBe(challenge);
+    expect(context.store.connections.find('kick')).toMatchObject({ accountLogin: 'machinearash', status: 'active' });
+    expect((await context.app.inject({ method: 'GET', url: '/admin', headers: { cookie } })).body).toContain(
+      'Connected as <strong>machinearash</strong>',
+    );
+
+    const replayed = await context.app.inject({ method: 'GET', url: `/admin/kick/callback?code=abc&state=${state}` });
+    expect(replayed.headers.location).toBe('/admin?notice=kick-expired');
+    expect(context.api.identifyStreamer).toHaveBeenCalledOnce();
+  });
+
+  it('says which events Kick refused', async () => {
+    context = build();
+    context.api.subscribe.mockResolvedValueOnce([{ event: 'channel.followed' }, { event: 'kicks.gifted', error: 'missing scope' }]);
+    const cookie = await signIn(context.app);
+    const state = queryFrom(await context.app.inject({ method: 'GET', url: '/admin/kick/connect', headers: { cookie } })).get('state');
+    const back = await context.app.inject({ method: 'GET', url: `/admin/kick/callback?code=abc&state=${state}` });
+    expect(back.headers.location).toBe('/admin?notice=kick-partial');
+  });
+
+  it('changes nothing when the streamer declines, and reports Kick failures', async () => {
+    context = build();
+    const cookie = await signIn(context.app);
+    const declined = queryFrom(await context.app.inject({ method: 'GET', url: '/admin/kick/connect', headers: { cookie } })).get('state');
+    expect((await context.app.inject({ method: 'GET', url: `/admin/kick/callback?error=access_denied&state=${declined}` })).headers.location).toBe(
+      '/admin?notice=kick-denied',
+    );
+    context.api.identifyStreamer.mockRejectedValueOnce(new Error('kick down'));
+    const failed = queryFrom(await context.app.inject({ method: 'GET', url: '/admin/kick/connect', headers: { cookie } })).get('state');
+    expect((await context.app.inject({ method: 'GET', url: `/admin/kick/callback?code=abc&state=${failed}` })).headers.location).toBe(
+      '/admin?notice=kick-failed',
+    );
+    expect(context.store.connections.find('kick')).toBeUndefined();
+  });
+
+  it('disconnects only with a session', async () => {
+    context = build();
+    context.store.connections.connect('kick', broadcasterId, 'machinearash');
+    expect((await context.app.inject({ method: 'POST', url: '/admin/kick/disconnect' })).headers.location).toBe('/admin/login');
+    expect(context.store.connections.find('kick')).toBeDefined();
+    const cookie = await signIn(context.app);
+    const response = await context.app.inject({ method: 'POST', url: '/admin/kick/disconnect', headers: { cookie } });
+    expect(response.headers.location).toBe('/admin?notice=kick-disconnected');
+    expect(context.store.connections.find('kick')).toBeUndefined();
   });
 });

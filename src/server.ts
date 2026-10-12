@@ -14,6 +14,7 @@ import { createDonationRepository } from './donations/donation-repository.ts';
 import { createLeaderboardQueries } from './donations/leaderboard.ts';
 import { createConnectionStore } from './platforms/connection-store.ts';
 import { createTwitchApi } from './twitch/twitch-api.ts';
+import { createKickApi } from './kick/kick-api.ts';
 import { createKickPublicKeySource } from './kick/kick-public-key.ts';
 import { createNowPaymentsClient } from './nowpayments/nowpayments-client.ts';
 
@@ -61,7 +62,12 @@ const app = buildApp(config, {
       eventSubSecret: loadOrCreateSessionSecret(join(dirname(config.databasePath), 'twitch-eventsub-secret')),
     },
   }),
-  ...(config.kick !== null && { kick: { publicKey: createKickPublicKeySource() } }),
+  ...(config.kick !== null && {
+    kick: {
+      api: createKickApi({ clientId: config.kick.clientId, clientSecret: config.kick.clientSecret }),
+      publicKey: createKickPublicKeySource(),
+    },
+  }),
   nowPayments: createNowPaymentsClient({
     apiKey: config.nowPayments.apiKey,
     baseUrl: config.nowPayments.baseUrl,
