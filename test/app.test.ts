@@ -77,6 +77,24 @@ describe('app', () => {
     expect(response.body).toContain('Page not found');
   });
 
+  it.each([
+    ['/admin/', '/admin'],
+    ['/thanks/?donation=abc', '/thanks?donation=abc'],
+    ['/healthz//', '/healthz'],
+  ])('redirects %s to its address without the trailing slash', async (url, location) => {
+    context = buildTestApp();
+    const response = await context.app.inject({ method: 'GET', url });
+    expect(response.statusCode).toBe(301);
+    expect(response.headers.location).toBe(location);
+  });
+
+  it('never redirects to another host, a post, or the home page', async () => {
+    context = buildTestApp();
+    expect((await context.app.inject({ method: 'GET', url: '//evil.example/' })).headers.location).toBeUndefined();
+    expect((await context.app.inject({ method: 'POST', url: '/donate/' })).statusCode).toBe(404);
+    expect((await context.app.inject({ method: 'GET', url: '/' })).statusCode).toBe(200);
+  });
+
   it('sends security headers on every response', async () => {
     context = buildTestApp();
     const response = await context.app.inject({ method: 'GET', url: '/' });

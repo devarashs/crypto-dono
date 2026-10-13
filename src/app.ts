@@ -101,6 +101,21 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
     forceCloseConnections: true,
   });
 
+  // Routes have no trailing slash; "/admin/" (often what a browser autocompletes)
+  // is sent to "/admin" rather than a 404. Redirected, not served under both
+  // spellings, because pages use relative links that resolve differently
+  // after a trailing slash. Only GET and HEAD: a form post is never redirected.
+  app.addHook('onRequest', async (request, reply) => {
+    if (request.method !== 'GET' && request.method !== 'HEAD') return;
+    const [path = '', query] = request.url.split('?', 2);
+    if (path.length > 1 && path.endsWith('/')) {
+      const trimmed = path.replace(/\/+$/, '') || '/';
+      // A leading "//" would make the Location a different host.
+      if (trimmed.startsWith('//')) return;
+      return reply.redirect(query === undefined ? trimmed : `${trimmed}?${query}`, 301);
+    }
+  });
+
   app.addHook('onSend', async (_request, reply) => {
     // A route that needs a different policy (the overlay runs a script) sets its
     // own header, which this must not overwrite.
