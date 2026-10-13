@@ -195,6 +195,36 @@ export const migrations: readonly Migration[] = [
       CREATE INDEX stream_events_received_at ON stream_events (received_at);
     `,
   },
+  {
+    version: 10,
+    description: 'Admin sign-ins that survive restarts',
+    sql: `
+      -- One row per signed-in admin browser. The id is a SHA-256 of the session
+      -- id in the cookie, so a copy of the database cannot be used to sign in.
+      CREATE TABLE admin_sessions (
+        id_hash TEXT PRIMARY KEY,
+        data TEXT NOT NULL,
+        expires_at TEXT NOT NULL
+      ) STRICT;
+      CREATE INDEX admin_sessions_expires_at ON admin_sessions (expires_at);
+    `,
+  },
+  {
+    version: 11,
+    description: 'The latest chat messages, for the dashboard after a restart',
+    sql: `
+      -- Only the newest few hundred are kept (the dashboard's buffer); older rows
+      -- are deleted as new ones arrive, and a moderator's removal deletes too.
+      CREATE TABLE chat_messages (
+        seq INTEGER PRIMARY KEY,
+        id TEXT NOT NULL UNIQUE,
+        platform TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        message TEXT NOT NULL
+      ) STRICT;
+      CREATE INDEX chat_messages_user ON chat_messages (platform, user_id);
+    `,
+  },
 ];
 
 /** The schema version a freshly opened database ends up at. */

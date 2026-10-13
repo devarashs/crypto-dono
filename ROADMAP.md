@@ -299,6 +299,21 @@ Twitch and Kick only (YouTube is not connected).
       with readable names, and messages gone 10 s after a ?fade=5. Removals and
       masking proven by route tests. Item 36 waits on real viewer numbers.
 
+## Phase 13 — Dashboard comforts
+
+Requested 2026-10-14.
+
+- [x] 38. Admin sign-ins survive restarts and deploys: sessions kept in the
+      database (hashed ids only), sliding expiry of 14 days without a visit.
+      (Asked for as "refresh tokens"; for a cookie session the equivalent is a
+      persistent server-side session, so no token is handed to the browser.)
+- [x] 39. The latest 300 chat messages are kept in the database, so a restart
+      does not empty the dashboard. Reverses the 2026-10-13 "never stored"
+      decision at the streamer's request; moderators' removals delete rows too.
+- [ ] 40. Twitch and Kick emotes shown as images on the dashboard, the chat
+      overlay and the scenes; third-party emotes (7TV, BTTV, FFZ) stay text.
+      Unicode emoji render on stream.
+
 ## Deferred ideas
 
 - Donor-chosen text-to-speech voices (one multi-speaker Piper model, e.g.

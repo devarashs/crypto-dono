@@ -15,10 +15,12 @@ import { createLeaderboardQueries } from './donations/leaderboard.ts';
 import { createConnectionStore } from './platforms/connection-store.ts';
 import { createTwitchApi } from './twitch/twitch-api.ts';
 import { createKickApi } from './kick/kick-api.ts';
+import { createSqliteSessionStore } from './admin/session-store.ts';
 import { createEventLog } from './events/event-log.ts';
 import { createDashboardHub } from './dashboard/dashboard-hub.ts';
 import { createStreamStatusPoller } from './dashboard/stream-status.ts';
 import { createChatBuffer } from './dashboard/chat.ts';
+import { createChatStore } from './dashboard/chat-store.ts';
 import { createTwitchChatClient } from './twitch/twitch-chat.ts';
 import { createSubscriptionHealth } from './platforms/subscription-health.ts';
 import { twitchWebhookPath } from './routes/twitch-webhook-routes.ts';
@@ -76,8 +78,9 @@ const streamStatus = createStreamStatusPoller({
   ...(kickApi !== undefined && { kick: kickApi }),
   onError: (platform, error) => app.log.warn({ err: error, platform }, 'Could not read stream status'),
 });
-// Viewers' chat, in memory only, shared by the Kick webhook and the Twitch reader.
-const chat = createChatBuffer(dashboardHub);
+// Viewers' chat, the latest few hundred kept in the database; shared by the
+// Kick webhook and the Twitch reader.
+const chat = createChatBuffer(dashboardHub, { store: createChatStore(database) });
 const twitchChat = createTwitchChatClient({
   channel: () => {
     const connection = connections.find('twitch');
@@ -111,6 +114,7 @@ const app = buildApp(config, {
   // Next to the database, so it lives in the same persistent volume.
   ...(config.adminPassword !== null && {
     adminSessionSecret: loadOrCreateSessionSecret(join(dirname(config.databasePath), 'session-secret')),
+    adminSessionStore: createSqliteSessionStore(database),
   }),
   alertHub: createAlertHub((error) => app.log.error({ err: error }, 'An overlay listener failed')),
   ...(config.tts !== null && {

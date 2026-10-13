@@ -67,7 +67,7 @@ describe('chat buffer', () => {
     const hub = createDashboardHub();
     const received = vi.fn();
     hub.subscribe(received);
-    const buffer = createChatBuffer(hub, 2);
+    const buffer = createChatBuffer(hub, { size: 2 });
     for (const id of ['a', 'b', 'c']) {
       buffer.add({ id, platform: 'twitch', at: 'now', userId: '1', user: 'u', badges: [], text: id });
     }
