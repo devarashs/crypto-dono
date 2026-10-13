@@ -271,6 +271,27 @@ hundred messages kept in memory; laid out for a wide browser window.
       anonymously and read-only, reconnecting on its own. Merged with Kick chat
       in one column, a platform icon on each message; emotes as text for now.
 
+## Phase 12 — Chat and viewers on stream
+
+Agreed 2026-10-13: the dashboard's combined chat and viewer count, on stream.
+Decided: chat on the main scene has no box, messages fade after about 30 s;
+the viewer count shows the total and each platform; on the three scenes chat
+is a column on the right and the count a pill by the title. The count covers
+Twitch and Kick only (YouTube is not connected).
+
+- [ ] 34. Stream-safe chat: banned words masked; Twitch message deletions,
+      timeouts and bans (CLEARMSG, CLEARCHAT) remove messages; a Kick ban
+      (moderation.banned, one more subscription) removes that viewer's
+      messages. Removals apply on the dashboard too. A single deleted Kick
+      message cannot be removed: Kick's API does not report it.
+- [ ] 35. Chat overlay, /overlay/<token>/chat: transparent, newest at the
+      bottom, each message fading after about 30 s.
+- [ ] 36. Viewer count overlay, /overlay/<token>/viewers: total and per
+      platform, hidden while offline everywhere; the status poller runs while
+      any overlay or dashboard is open.
+- [ ] 37. The Starting Soon, BRB and Ending Soon scenes gain a chat column on
+      the right and a viewer pill by the title.
+
 ## Deferred ideas
 
 - Donor-chosen text-to-speech voices (one multi-speaker Piper model, e.g.
