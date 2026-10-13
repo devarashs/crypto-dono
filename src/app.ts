@@ -239,6 +239,11 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
       publishAlert,
       prepareSpeech,
       ...(dependencies.alertSpeech !== undefined && { alertSpeech: dependencies.alertSpeech }),
+      live: {
+        hub: dashboardHub,
+        chat,
+        ...(dependencies.streamStatus !== undefined && { streamStatus: dependencies.streamStatus }),
+      },
     });
   });
 
@@ -261,6 +266,7 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
         publicKey: kick.publicKey,
         publishEvent,
         onChatMessage: (message) => chat.add(message),
+        onChatRemoval: (removal) => chat.remove(removal),
       });
     });
   }

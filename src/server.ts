@@ -84,6 +84,7 @@ const twitchChat = createTwitchChatClient({
     return connection?.status === 'active' ? connection.accountLogin : null;
   },
   onMessage: (message) => chat.add(message),
+  onRemoval: (removal) => chat.remove(removal),
   log: (message) => app.log.info(message),
 });
 const app = buildApp(config, {

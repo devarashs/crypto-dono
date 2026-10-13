@@ -7,6 +7,7 @@
  */
 @import url('tokens.css');
 @import url('effects.css');
+@import url('stream-widgets.css');
 
 *,
 *::before,
@@ -45,13 +46,49 @@ ul {
   margin: 0;
 }
 
-/* Header on top, three panels in the middle, socials along the bottom. */
+/*
+ * Header on top, three panels in the middle, socials along the bottom, and
+ * chat as a full-height column on the right.
+ */
 .scene__stage {
+  box-sizing: border-box;
   height: 100vh;
   display: grid;
+  grid-template-columns: minmax(0, 1fr) 30rem;
   grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    'header chat'
+    'panels chat'
+    'socials chat';
   gap: 2.5rem;
-  padding: 4rem 6rem 3rem;
+  padding: 4rem 4rem 3rem 5rem;
+}
+
+.scene__header {
+  grid-area: header;
+}
+
+.scene__panels {
+  grid-area: panels;
+}
+
+.scene__socials {
+  grid-area: socials;
+}
+
+.scene-panel--chat {
+  grid-area: chat;
+}
+
+/* Chat fills its column; on a scene the messages stay rather than fade. */
+.scene-chat {
+  flex: 1;
+  min-height: 0;
+  font-size: 1.3rem;
+}
+
+.scene__viewers {
+  justify-self: center;
 }
 
 /* ── Header ────────────────────────────────────────────────────────────── */
@@ -106,7 +143,7 @@ ul {
 
 .scene__panels {
   display: grid;
-  grid-template-columns: 26rem 1fr 1fr;
+  grid-template-columns: 22rem 1fr 1fr;
   gap: 2rem;
   align-items: stretch;
   min-height: 0;

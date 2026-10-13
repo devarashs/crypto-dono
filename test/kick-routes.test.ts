@@ -6,7 +6,7 @@ import { createAlertHub, type OverlayAlert } from '../src/alerts/alert-hub.ts';
 import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
 import type { KickApi } from '../src/kick/kick-api.ts';
-import type { ChatMessage } from '../src/dashboard/chat.ts';
+import type { ChatMessage, ChatRemoval } from '../src/dashboard/chat.ts';
 import type { KickPublicKeySource } from '../src/kick/kick-public-key.ts';
 import { createInMemoryStore } from './support/in-memory-store.ts';
 
@@ -21,6 +21,7 @@ type Context = {
   keyFetches: { current: number; refresh: number };
   api: { [K in keyof KickApi]: ReturnType<typeof vi.fn> };
   chat: ChatMessage[];
+  removals: ChatRemoval[];
 };
 
 const password = 'correct horse battery staple';
@@ -63,6 +64,7 @@ function build(servedKeys: readonly string[] = [pemOf(pairs[0]!.publicKey)], env
   };
   const api = fakeKickApi();
   const chat: ChatMessage[] = [];
+  const removals: ChatRemoval[] = [];
   const app = buildApp(config, {
     donations: store.donations,
     leaderboard: store.leaderboard,
@@ -71,9 +73,13 @@ function build(servedKeys: readonly string[] = [pemOf(pairs[0]!.publicKey)], env
     alertHub,
     adminSessionSecret: 'a'.repeat(64),
     ...(withKick && { kick: { api: api as unknown as KickApi, publicKey } }),
-    chat: { add: (message: ChatMessage) => void chat.push(message), recent: () => chat },
+    chat: {
+      add: (message: ChatMessage) => void chat.push(message),
+      remove: (removal: ChatRemoval) => void removals.push(removal),
+      recent: () => chat,
+    },
   });
-  return { app, store, published, keyFetches, api, chat };
+  return { app, store, published, keyFetches, api, chat, removals };
 }
 
 /** A webhook signed exactly as Kick's docs describe. */
@@ -132,16 +138,29 @@ describe('Kick webhook', () => {
     const response = await deliver(context, 'chat.message.sent', {
       message_id: 'chat-1',
       broadcaster: { user_id: 123 },
-      sender: { username: 'kicker', identity: { username_color: '#00FF00', badges: [{ type: 'vip', text: 'VIP' }] } },
+      sender: { user_id: 9, username: 'kicker', identity: { username_color: '#00FF00', badges: [{ type: 'vip', text: 'VIP' }] } },
       content: 'hello chat',
       created_at: '2026-10-13T10:00:00Z',
     });
     expect(response.statusCode).toBe(200);
     expect(context.chat).toEqual([
-      { id: 'kick-chat-1', platform: 'kick', at: '2026-10-13T10:00:00Z', user: 'kicker', color: '#00FF00', badges: ['vip'], text: 'hello chat' },
+      { id: 'kick-chat-1', platform: 'kick', at: '2026-10-13T10:00:00Z', userId: '9', user: 'kicker', color: '#00FF00', badges: ['vip'], text: 'hello chat' },
     ]);
     expect(context.published).toEqual([]);
     expect(context.store.eventLog.recent(10)).toEqual([]);
+  });
+
+  it("removes a banned viewer's chat", async () => {
+    context = build();
+    context.store.connections.connect('kick', broadcasterId, 'machinearash');
+    const response = await deliver(context, 'moderation.banned', {
+      broadcaster: { user_id: 123 },
+      moderator: { user_id: 5, username: 'mod' },
+      banned_user: { user_id: 9, username: 'troll' },
+      metadata: { reason: 'spam', created_at: '2026-10-13T10:00:00Z', expires_at: null },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(context.removals).toEqual([{ kind: 'user', platform: 'kick', userId: '9' }]);
   });
 
   it('acknowledges a malformed chat message without passing it on', async () => {

@@ -1,0 +1,132 @@
+/*
+ * Chat list and viewer pill as they appear on stream: the chat overlay, the
+ * viewer overlay and the scenes. Sized for a 1080p canvas; only transform and
+ * opacity animate.
+ */
+
+/* ── Chat ──────────────────────────────────────────────────────────────── */
+
+.stream-chat {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  line-height: 1.35;
+  color: var(--color-text);
+  /* Drawn straight on video: every line carries the dark halo. */
+  text-shadow: var(--overlay-text-halo);
+  overflow: hidden;
+}
+
+.stream-chat__message {
+  overflow-wrap: anywhere;
+  animation: stream-chat-enter var(--motion-entrance) var(--ease-out);
+  transition: opacity 400ms var(--ease-in);
+}
+
+.stream-chat__message.is-leaving {
+  opacity: 0;
+}
+
+@keyframes stream-chat-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+/* A small square naming the platform: T for Twitch, K for Kick. */
+.stream-chat__platform {
+  display: inline-grid;
+  place-items: center;
+  width: 1.4em;
+  height: 1.4em;
+  margin-right: 0.4em;
+  border-radius: 4px;
+  font-size: 0.7em;
+  font-weight: 700;
+  color: var(--color-void);
+  text-shadow: none;
+  vertical-align: 0.15em;
+}
+
+.stream-chat__message--twitch .stream-chat__platform {
+  background: var(--color-twitch);
+}
+
+.stream-chat__message--kick .stream-chat__platform {
+  background: var(--color-kick);
+}
+
+.stream-chat__user {
+  margin-right: 0.4em;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.stream-chat__user::after {
+  content: ':';
+  color: var(--color-text);
+}
+
+/* ── Viewer count ──────────────────────────────────────────────────────── */
+
+.viewer-pill {
+  display: inline-grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-5);
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--color-accent-soft);
+  background: var(--overlay-surface);
+  font-family: var(--font-mono);
+  color: var(--color-text);
+  text-align: center;
+}
+
+.viewer-pill[hidden] {
+  display: none;
+}
+
+.viewer-pill p {
+  margin: 0;
+}
+
+.viewer-pill__total {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+}
+
+.viewer-pill__total strong {
+  color: var(--color-accent);
+}
+
+/* The live dot: red, like every platform's live badge. */
+.viewer-pill__dot {
+  display: inline-block;
+  width: 0.6em;
+  height: 0.6em;
+  margin-right: 0.5em;
+  border-radius: 50%;
+  background: var(--color-danger);
+  box-shadow: 0 0 0.6em var(--color-danger);
+  vertical-align: 0.1em;
+}
+
+.viewer-pill__platforms {
+  font-size: 1rem;
+  color: var(--color-text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stream-chat__message {
+    animation: none;
+  }
+}

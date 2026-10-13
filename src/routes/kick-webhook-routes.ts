@@ -14,8 +14,8 @@ import type { KickPublicKeySource } from '../kick/kick-public-key.ts';
 import { translateKickEvent, verifyKickSignature } from '../kick/kick-webhook.ts';
 import type { ConnectionStore } from '../platforms/connection-store.ts';
 import { isFreshMessage } from '../platforms/message-freshness.ts';
-import type { ChatMessage } from '../dashboard/chat.ts';
-import { translateKickChat } from '../kick/kick-chat.ts';
+import type { ChatMessage, ChatRemoval } from '../dashboard/chat.ts';
+import { translateKickBan, translateKickChat } from '../kick/kick-chat.ts';
 
 export const kickWebhookPath = '/webhooks/kick';
 
@@ -26,6 +26,8 @@ export type KickWebhookDependencies = {
   readonly publishEvent: (event: StreamEvent, alertId: string) => boolean;
   /** Hands a chat message to the live dashboard; absent when nothing shows chat. */
   readonly onChatMessage?: (message: ChatMessage) => void;
+  /** A moderator banned or timed out a viewer. */
+  readonly onChatRemoval?: (removal: ChatRemoval) => void;
   readonly now?: () => number;
 };
 
@@ -39,7 +41,7 @@ function renewalDuration(eventType: string, payload: unknown): { duration?: unkn
 }
 
 export function registerKickWebhookRoutes(app: FastifyInstance, dependencies: KickWebhookDependencies): void {
-  const { connections, publicKey, publishEvent, onChatMessage } = dependencies;
+  const { connections, publicKey, publishEvent, onChatMessage, onChatRemoval } = dependencies;
   const now = dependencies.now ?? Date.now;
 
   // The signature covers the exact bytes Kick sent, so keep the raw body.
@@ -86,6 +88,17 @@ export function registerKickWebhookRoutes(app: FastifyInstance, dependencies: Ki
     const connection = connections.find('kick');
     if (connection === undefined || connection.status !== 'active') {
       request.log.info(logContext, 'Ignored a Kick event: Kick is not connected');
+      return reply.code(200).send();
+    }
+
+    if (eventType === 'moderation.banned') {
+      try {
+        const removal = translateKickBan(JSON.parse(rawBody), connection.accountId);
+        if (removal !== null) onChatRemoval?.(removal);
+        request.log.info(logContext, 'Kick ban received; removed their chat');
+      } catch (error) {
+        request.log.error({ ...logContext, err: (error as Error).message }, 'Could not read a Kick ban');
+      }
       return reply.code(200).send();
     }
 

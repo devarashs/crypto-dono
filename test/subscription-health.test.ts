@@ -65,7 +65,7 @@ describe('subscription health', () => {
       now,
     });
     expect((await health.check()).kick).toBe(
-      'channel.subscription.new missing, channel.subscription.renewal missing, channel.subscription.gifts missing, chat.message.sent missing',
+      'channel.subscription.new missing, channel.subscription.renewal missing, channel.subscription.gifts missing, chat.message.sent missing, moderation.banned missing',
     );
     expect(health.finding('kick')?.problem).toContain('channel.subscription.new missing');
   });

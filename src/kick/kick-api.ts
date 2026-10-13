@@ -22,8 +22,10 @@ export const kickEventNames = [
   'channel.subscription.renewal',
   'channel.subscription.gifts',
   'kicks.gifted',
-  // For the live dashboard; never stored.
+  // For the live dashboard and the chat overlay; never stored.
   'chat.message.sent',
+  // Bans and timeouts, so that viewer's messages come off the chat overlay.
+  'moderation.banned',
 ] as const;
 
 export class KickApiError extends Error {
