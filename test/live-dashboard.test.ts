@@ -151,6 +151,8 @@ describe('live dashboard', () => {
     );
     expect(snapshot).toContainEqual(expect.objectContaining({ id: 'kick-old', source: 'kick', message: 'gg' }));
     expect(JSON.stringify(snapshot)).not.toContain(unpaid.publicId);
+    await stream.waitFor('chat-snapshot');
+    expect(stream.blocks('chat-snapshot')).toEqual([[]]);
 
     await deliverFollow('m1', 'NeonRider');
     await stream.waitFor('activity');

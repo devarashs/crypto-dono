@@ -14,6 +14,8 @@ import type { KickPublicKeySource } from '../kick/kick-public-key.ts';
 import { translateKickEvent, verifyKickSignature } from '../kick/kick-webhook.ts';
 import type { ConnectionStore } from '../platforms/connection-store.ts';
 import { isFreshMessage } from '../platforms/message-freshness.ts';
+import type { ChatMessage } from '../dashboard/chat.ts';
+import { translateKickChat } from '../kick/kick-chat.ts';
 
 export const kickWebhookPath = '/webhooks/kick';
 
@@ -22,6 +24,8 @@ export type KickWebhookDependencies = {
   readonly publicKey: KickPublicKeySource;
   /** Presents and publishes an event; false when its kind is switched off. */
   readonly publishEvent: (event: StreamEvent, alertId: string) => boolean;
+  /** Hands a chat message to the live dashboard; absent when nothing shows chat. */
+  readonly onChatMessage?: (message: ChatMessage) => void;
   readonly now?: () => number;
 };
 
@@ -35,7 +39,7 @@ function renewalDuration(eventType: string, payload: unknown): { duration?: unkn
 }
 
 export function registerKickWebhookRoutes(app: FastifyInstance, dependencies: KickWebhookDependencies): void {
-  const { connections, publicKey, publishEvent } = dependencies;
+  const { connections, publicKey, publishEvent, onChatMessage } = dependencies;
   const now = dependencies.now ?? Date.now;
 
   // The signature covers the exact bytes Kick sent, so keep the raw body.
@@ -82,6 +86,17 @@ export function registerKickWebhookRoutes(app: FastifyInstance, dependencies: Ki
     const connection = connections.find('kick');
     if (connection === undefined || connection.status !== 'active') {
       request.log.info(logContext, 'Ignored a Kick event: Kick is not connected');
+      return reply.code(200).send();
+    }
+
+    if (eventType === 'chat.message.sent') {
+      try {
+        const message = translateKickChat(JSON.parse(rawBody), connection.accountId, new Date(now()).toISOString());
+        if (message !== null) onChatMessage?.(message);
+      } catch (error) {
+        // Logged without the message itself: chat is not kept anywhere.
+        request.log.error({ ...logContext, err: (error as Error).message }, 'Could not read a Kick chat message');
+      }
       return reply.code(200).send();
     }
 

@@ -5,10 +5,12 @@
  */
 import type { ActivityItem } from './activity.ts';
 import type { ChannelStatus } from './stream-status.ts';
+import type { ChatMessage } from './chat.ts';
 
 export type DashboardMessage =
   | { readonly type: 'activity'; readonly item: ActivityItem }
-  | { readonly type: 'status'; readonly statuses: readonly ChannelStatus[] };
+  | { readonly type: 'status'; readonly statuses: readonly ChannelStatus[] }
+  | { readonly type: 'chat'; readonly message: ChatMessage };
 
 export type DashboardListener = (message: DashboardMessage) => void;
 

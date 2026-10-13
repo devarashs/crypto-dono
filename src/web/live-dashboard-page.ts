@@ -19,7 +19,9 @@ export function renderLiveDashboardPage(): SafeHtml {
         </header>
         <section class="live__panel live__panel--chat" aria-labelledby="live-chat-title">
           <h2 class="panel__title" id="live-chat-title">Chat</h2>
-          <p class="muted">Twitch and Kick chat will appear here.</p>
+          <ol class="chat" id="chat" aria-live="off"></ol>
+          <p class="empty-state" id="chat-empty" hidden>No chat yet. Twitch and Kick messages show up here, newest at the bottom.</p>
+          <button class="button button--small chat__jump" id="chat-jump" type="button" hidden>New messages</button>
         </section>
         <section class="live__panel live__panel--activity" aria-labelledby="live-activity-title">
           <h2 class="panel__title" id="live-activity-title">Activity</h2>

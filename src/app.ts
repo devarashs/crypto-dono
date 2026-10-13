@@ -26,6 +26,7 @@ import type { SubscriptionHealth } from './platforms/subscription-health.ts';
 import { activityFromDonation, activityFromEvent } from './dashboard/activity.ts';
 import { createDashboardHub, type DashboardHub } from './dashboard/dashboard-hub.ts';
 import type { StreamStatusPoller } from './dashboard/stream-status.ts';
+import { createChatBuffer, type ChatBuffer } from './dashboard/chat.ts';
 import type { EventLog } from './events/event-log.ts';
 import type { KickPublicKeySource } from './kick/kick-public-key.ts';
 import { registerKickWebhookRoutes } from './routes/kick-webhook-routes.ts';
@@ -50,6 +51,8 @@ export type AppDependencies = {
   readonly twitch?: { readonly api: TwitchApi; readonly eventSubSecret: string };
   /** Fan-out to open dashboards; made here unless the server shares one with the status poller. */
   readonly dashboardHub?: DashboardHub;
+  /** Recent chat for the dashboard; made here unless the server shares one with a chat client. */
+  readonly chat?: ChatBuffer;
   /** The dashboard status bar's source. */
   readonly streamStatus?: Pick<StreamStatusPoller, 'current' | 'refresh'>;
   /** Stores platform events for the live dashboard's feed; absent in tests that do not need it. */
@@ -160,6 +163,8 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
   /** Live dashboard pages; see routes/live-dashboard-routes.ts. */
   const dashboardHub =
     dependencies.dashboardHub ?? createDashboardHub((error) => app.log.error({ err: error }, 'A dashboard listener failed'));
+  /** Chat from every platform, kept in memory for the dashboard only. */
+  const chat = dependencies.chat ?? createChatBuffer(dashboardHub);
 
   function publishEvent(event: StreamEvent, alertId = `event-${randomUUID()}`): boolean {
     // Every real event reaches the dashboard, even a kind whose alert is off.
@@ -251,7 +256,12 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
   const kick = config.kick !== null ? dependencies.kick : undefined;
   if (kick !== undefined) {
     app.register(async (scope) => {
-      registerKickWebhookRoutes(scope, { connections: dependencies.connections, publicKey: kick.publicKey, publishEvent });
+      registerKickWebhookRoutes(scope, {
+        connections: dependencies.connections,
+        publicKey: kick.publicKey,
+        publishEvent,
+        onChatMessage: (message) => chat.add(message),
+      });
     });
   }
 
@@ -285,6 +295,7 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
         dashboard: {
           hub: dashboardHub,
           eventTemplates: config.events.templates,
+          chat,
           ...(dependencies.streamStatus !== undefined && { streamStatus: dependencies.streamStatus }),
           ...(dependencies.eventLog !== undefined && { eventLog: dependencies.eventLog }),
         },
