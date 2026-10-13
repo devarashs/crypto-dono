@@ -14,7 +14,7 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  font-family: var(--font-mono);
+  font-family: var(--font-mono), var(--font-emoji);
   font-size: 1.5rem;
   line-height: 1.35;
   color: var(--color-text);
@@ -72,6 +72,14 @@
 .stream-chat__user::after {
   content: ':';
   color: var(--color-text);
+}
+
+/* Emotes sit in the line like a large character. */
+.chat-emote {
+  height: 1.6em;
+  width: auto;
+  margin: -0.3em 0.1em;
+  vertical-align: middle;
 }
 
 /* ── Viewer count ──────────────────────────────────────────────────────── */

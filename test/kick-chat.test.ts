@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createChatBuffer, safeColor } from '../src/dashboard/chat.ts';
 import { createDashboardHub } from '../src/dashboard/dashboard-hub.ts';
-import { translateKickBan, translateKickChat } from '../src/kick/kick-chat.ts';
+import { kickFragments, translateKickBan, translateKickChat } from '../src/kick/kick-chat.ts';
 
 /** Shaped like the chat.message.sent example in Kick's docs. */
 const payload = (overrides: Record<string, unknown> = {}) => ({
@@ -40,6 +40,7 @@ describe('translateKickChat', () => {
       color: '#FF00AA',
       badges: ['moderator', 'subscriber'],
       text: 'hello KEKW gg',
+      fragments: [{ text: 'hello ' }, { emote: 'KEKW', url: 'https://files.kick.com/emotes/37226/fullsize' }, { text: ' gg' }],
     });
   });
 
@@ -53,6 +54,7 @@ describe('translateKickChat', () => {
       user: 'plain',
       badges: [],
       text: 'hello KEKW gg',
+      fragments: [{ text: 'hello ' }, { emote: 'KEKW', url: 'https://files.kick.com/emotes/37226/fullsize' }, { text: ' gg' }],
     });
     expect(translateKickChat(payload(), '999', 'now')).toBeNull();
   });
@@ -74,6 +76,17 @@ describe('chat buffer', () => {
     expect(buffer.recent().map((message) => message.id)).toEqual(['b', 'c']);
     expect(received).toHaveBeenCalledTimes(3);
     expect(received).toHaveBeenLastCalledWith({ type: 'chat', message: expect.objectContaining({ id: 'c' }) });
+  });
+});
+
+describe('kickFragments', () => {
+  it('splits text and emotes, and leaves plain text alone', () => {
+    expect(kickFragments('[emote:1:A][emote:2:B] hi')).toEqual([
+      { emote: 'A', url: 'https://files.kick.com/emotes/1/fullsize' },
+      { emote: 'B', url: 'https://files.kick.com/emotes/2/fullsize' },
+      { text: ' hi' },
+    ]);
+    expect(kickFragments('no emotes [emote:x:bad]')).toBeUndefined();
   });
 });
 

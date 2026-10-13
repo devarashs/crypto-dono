@@ -11,6 +11,8 @@
  * http://nowpayments.io/payment?iid=… before upgrading back to https (observed
  * 2026-10-11). Without it the browser silently stays on the donation form.
  */
+import { emoteImageOrigins } from '../dashboard/chat.ts';
+
 export const publicPagePolicy =
   "default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self' data:; " +
   "form-action 'self' https://nowpayments.io https://*.nowpayments.io http://nowpayments.io; " +
@@ -21,3 +23,12 @@ export const publicPagePolicy =
  * for a page that enhances itself, like the soundboard's preview buttons.
  */
 export const publicPageWithScriptPolicy = publicPagePolicy.replace("script-src 'none'", "script-src 'self'");
+
+/**
+ * The live dashboard: its own script, plus chat emote images from Twitch's
+ * and Kick's CDNs (see dashboard/chat.ts).
+ */
+export const liveDashboardPolicy = publicPageWithScriptPolicy.replace(
+  "img-src 'self' data:",
+  `img-src 'self' data: ${emoteImageOrigins.join(' ')}`,
+);

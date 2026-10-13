@@ -3,6 +3,8 @@
  * The server sends text already worded as headline parts; everything is placed
  * with textContent, never parsed as HTML.
  */
+import { fillChatText } from './stream-widgets.js';
+
 const list = document.getElementById('activity');
 const empty = document.getElementById('activity-empty');
 const connection = document.getElementById('live-connection');
@@ -143,7 +145,7 @@ function renderChat(message) {
   if (color !== '') user.style.color = color;
   const text = document.createElement('span');
   text.className = 'chat__text';
-  text.textContent = message.text;
+  fillChatText(text, message);
   row.append(user, text);
   return row;
 }

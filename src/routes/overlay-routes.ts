@@ -35,6 +35,7 @@ import { validateDonationForm, type DonationFormValues } from '../donations/dona
 import type { DonationRepository } from '../donations/donation-repository.ts';
 import type { LeaderboardQueries } from '../donations/leaderboard.ts';
 import { registerLiveOverlayRoutes, type LiveOverlayDependencies } from './live-overlay-routes.ts';
+import { emoteImageOrigins } from '../dashboard/chat.ts';
 import { switchableEventKinds, type StreamEvent, type StreamEventKind } from '../events/stream-event.ts';
 import { formatMoneyForDisplay } from '../money.ts';
 import { html } from '../web/html.ts';
@@ -87,7 +88,7 @@ export type OverlayRouteDependencies = {
 /** The overlay runs a script, so it needs a looser policy than the script-free public pages. */
 const overlayContentSecurityPolicy =
   "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; " +
-  "img-src 'self' data:; media-src 'self' data:; frame-ancestors 'none'; base-uri 'none'";
+  `img-src 'self' data: ${emoteImageOrigins.join(' ')}; media-src 'self' data:; frame-ancestors 'none'; base-uri 'none'`;
 
 type TokenParams = { token: string };
 

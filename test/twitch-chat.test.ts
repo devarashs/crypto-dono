@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatMessage } from '../src/dashboard/chat.ts';
-import { createTwitchChatClient, parseIrcLine, toChatMessage, toChatRemoval, type ChatSocket } from '../src/twitch/twitch-chat.ts';
+import { createTwitchChatClient, parseIrcLine, toChatMessage, toChatRemoval, twitchFragments, type ChatSocket } from '../src/twitch/twitch-chat.ts';
 import type { ChatRemoval } from '../src/dashboard/chat.ts';
 
 const privmsg =
@@ -36,6 +36,11 @@ describe('toChatMessage', () => {
       color: '#1E90FF',
       badges: ['moderator', 'subscriber'],
       text: 'hello Kappa gg',
+      fragments: [
+        { text: 'hello ' },
+        { emote: 'Kappa', url: 'https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/2.0' },
+        { text: ' gg' },
+      ],
     });
   });
 
@@ -54,6 +59,35 @@ describe('toChatMessage', () => {
 
   it('ignores everything that is not a chat line', () => {
     expect(toChatMessage(parseIrcLine(':tmi.twitch.tv 001 justinfan123 :Welcome, GLHF!')!)).toBeNull();
+  });
+});
+
+describe('twitchFragments', () => {
+  const url = (id: string) => `https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/2.0`;
+
+  it('counts positions in characters, so emoji before an emote do not shift it', () => {
+    expect(twitchFragments('😂 Kappa Kappa', '25:2-6,8-12')).toEqual([
+      { text: '😂 ' },
+      { emote: 'Kappa', url: url('25') },
+      { text: ' ' },
+      { emote: 'Kappa', url: url('25') },
+    ]);
+  });
+
+  it('handles several emotes, v2 ids, and an emote-only message', () => {
+    expect(twitchFragments('LUL', 'emotesv2_abc123:0-2')).toEqual([{ emote: 'LUL', url: url('emotesv2_abc123') }]);
+    expect(twitchFragments('a b c', '1:0-0/2:4-4')).toEqual([
+      { emote: 'a', url: url('1') },
+      { text: ' b ' },
+      { emote: 'c', url: url('2') },
+    ]);
+  });
+
+  it('ignores a missing tag, unsafe ids and out-of-range positions', () => {
+    expect(twitchFragments('hello', undefined)).toBeUndefined();
+    expect(twitchFragments('hello', '')).toBeUndefined();
+    expect(twitchFragments('hello', 'bad.id"<:0-4')).toBeUndefined();
+    expect(twitchFragments('hello', '25:3-9')).toBeUndefined();
   });
 });
 

@@ -108,6 +108,7 @@ describe('chat and viewers on stream', () => {
       expect(response.body).toContain('data-stream-url="live"');
       expect(response.body).not.toContain(token);
       expect(response.headers['content-security-policy']).toContain("script-src 'self'");
+      expect(response.headers['content-security-policy']).toContain("img-src 'self' data: https://static-cdn.jtvnw.net https://files.kick.com");
     }
     for (const file of ['chat-overlay.js', 'viewers-overlay.js', 'live-stream.js', 'stream-widgets.js', 'stream-widgets.css', 'live-overlay.css']) {
       expect((await app.inject({ method: 'GET', url: `/static/${file}` })).statusCode, file).toBe(200);
@@ -174,9 +175,20 @@ describe('chat and viewers on stream', () => {
     await stream.waitFor('status');
     expect(stream.blocks('status')[0]).toHaveLength(2);
 
-    chat.add(message('k1', { platform: 'kick', userId: '42', text: 'BADWORD again' }));
+    chat.add(
+      message('k1', {
+        platform: 'kick',
+        userId: '42',
+        text: 'BADWORD again KEKW',
+        fragments: [{ text: 'BADWORD again ' }, { emote: 'KEKW', url: 'https://files.kick.com/emotes/1/fullsize' }],
+      }),
+    );
     await stream.waitFor('chat');
-    expect(stream.blocks('chat')[0]).toMatchObject({ id: 'k1', text: '******* again' });
+    expect(stream.blocks('chat')[0]).toMatchObject({
+      id: 'k1',
+      text: '******* again KEKW',
+      fragments: [{ text: '******* again ' }, { emote: 'KEKW', url: 'https://files.kick.com/emotes/1/fullsize' }],
+    });
 
     chat.remove({ kind: 'user', platform: 'kick', userId: '42' });
     await stream.waitFor('chat-remove');

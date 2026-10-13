@@ -13,7 +13,7 @@ import type { ChatBuffer } from '../dashboard/chat.ts';
 import type { DonationRepository } from '../donations/donation-repository.ts';
 import type { EventLog } from '../events/event-log.ts';
 import type { StreamEventKind } from '../events/stream-event.ts';
-import { publicPageWithScriptPolicy } from '../web/content-security-policy.ts';
+import { liveDashboardPolicy } from '../web/content-security-policy.ts';
 import { renderLiveDashboardPage } from '../web/live-dashboard-page.ts';
 import { sendHtml } from './donation-routes.ts';
 
@@ -50,7 +50,7 @@ export function registerLiveDashboardRoutes(
 
   app.get('/admin/live', { preHandler: requireAdmin }, async (_request, reply) => {
     // The page runs its own script to receive updates; still no inline script.
-    reply.header('content-security-policy', publicPageWithScriptPolicy);
+    reply.header('content-security-policy', liveDashboardPolicy);
     return sendHtml(reply, 200, renderLiveDashboardPage());
   });
 

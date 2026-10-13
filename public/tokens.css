@@ -67,6 +67,8 @@
   /* ── Type ───────────────────────────────────────────────────────────── */
   --font-display: 'Orbitron Variable', 'Eurostile', 'Arial Black', sans-serif;
   --font-mono: 'Share Tech Mono', ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
+  /* Colour emoji for chat: the mono fonts have none, so each OS's own is named. */
+  --font-emoji: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji';
 
   --text-xs: 0.8125rem;
   --text-sm: 0.9375rem;

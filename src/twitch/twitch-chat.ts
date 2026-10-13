@@ -6,7 +6,7 @@
  * be sent. Docs: https://dev.twitch.tv/docs/chat/irc/ (anonymous connections,
  * tags, PING, RECONNECT).
  */
-import { safeColor, type ChatMessage, type ChatRemoval } from '../dashboard/chat.ts';
+import { safeColor, type ChatFragment, type ChatMessage, type ChatRemoval } from '../dashboard/chat.ts';
 
 export const twitchChatUrl = 'wss://irc-ws.chat.twitch.tv:443';
 
@@ -55,6 +55,45 @@ export function parseIrcLine(line: string): IrcMessage | null {
   return { tags, prefix, command, params };
 }
 
+/**
+ * Splits a message by Twitch's emotes tag ("25:0-4,12-16/1902:6-10"): emote
+ * ids with inclusive character ranges, counted in code points. Third-party
+ * emotes (7TV, BTTV, FFZ) are not in the tag and stay text.
+ *
+ * @returns The fragments, or `undefined` when there are no (valid) emotes.
+ */
+export function twitchFragments(text: string, emotesTag: string | undefined): ChatFragment[] | undefined {
+  if (!emotesTag) return undefined;
+  const characters = Array.from(text);
+  const ranges: { start: number; end: number; id: string }[] = [];
+  for (const entry of emotesTag.split('/')) {
+    const [id = '', positions = ''] = entry.split(':');
+    // Ids are numbers or "emotesv2_<hex>"; anything else is not put in a URL.
+    if (!/^[A-Za-z0-9_]+$/.test(id)) continue;
+    for (const position of positions.split(',')) {
+      const [start, end] = position.split('-').map(Number);
+      if (Number.isInteger(start) && Number.isInteger(end) && start! <= end! && end! < characters.length) {
+        ranges.push({ start: start!, end: end!, id });
+      }
+    }
+  }
+  if (ranges.length === 0) return undefined;
+  ranges.sort((first, second) => first.start - second.start);
+  const fragments: ChatFragment[] = [];
+  let cursor = 0;
+  for (const range of ranges) {
+    if (range.start < cursor) continue; // Overlapping ranges: keep the first.
+    if (range.start > cursor) fragments.push({ text: characters.slice(cursor, range.start).join('') });
+    fragments.push({
+      emote: characters.slice(range.start, range.end + 1).join(''),
+      url: `https://static-cdn.jtvnw.net/emoticons/v2/${range.id}/default/dark/2.0`,
+    });
+    cursor = range.end + 1;
+  }
+  if (cursor < characters.length) fragments.push({ text: characters.slice(cursor).join('') });
+  return fragments;
+}
+
 /** A chat line as a dashboard message; `null` for anything that is not one. */
 export function toChatMessage(message: IrcMessage, now: () => Date = () => new Date()): ChatMessage | null {
   if (message.command !== 'PRIVMSG') return null;
@@ -65,6 +104,7 @@ export function toChatMessage(message: IrcMessage, now: () => Date = () => new D
   if (action !== null) text = action[1] ?? '';
   const sentAt = Number(message.tags['tmi-sent-ts']);
   const color = safeColor(message.tags.color);
+  const fragments = twitchFragments(text, message.tags.emotes);
   return {
     id: `twitch-${message.tags.id || `${login}-${message.tags['tmi-sent-ts'] ?? ''}`}`,
     platform: 'twitch',
@@ -77,6 +117,7 @@ export function toChatMessage(message: IrcMessage, now: () => Date = () => new D
       .map((badge) => badge.split('/')[0] ?? '')
       .filter((badge) => badge !== ''),
     text,
+    ...(fragments !== undefined && { fragments }),
   };
 }
 

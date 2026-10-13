@@ -125,6 +125,7 @@ describe('live dashboard', () => {
     expect(page.statusCode).toBe(200);
     expect(page.body).toContain('<script type="module" src="/static/admin-live.js">');
     expect(page.headers['content-security-policy']).toContain("script-src 'self'");
+    expect(page.headers['content-security-policy']).toContain('https://static-cdn.jtvnw.net https://files.kick.com');
     expect((await app.inject({ method: 'GET', url: '/admin', headers: { cookie } })).body).toContain('href="/admin/live"');
     expect((await app.inject({ method: 'GET', url: '/static/admin-live.js' })).statusCode).toBe(200);
   });

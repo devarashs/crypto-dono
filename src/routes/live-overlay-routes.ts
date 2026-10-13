@@ -47,6 +47,9 @@ export function registerLiveOverlayRoutes(app: FastifyInstance, dependencies: Li
     ...message,
     user: bannedWords.mask(message.user),
     text: bannedWords.mask(message.text),
+    ...(message.fragments !== undefined && {
+      fragments: message.fragments.map((fragment) => ('text' in fragment ? { text: bannedWords.mask(fragment.text) } : fragment)),
+    }),
   });
 
   app.get<{ Querystring: { fade?: string; max?: string } }>('/overlay/:token/chat', async (request, reply) => {
