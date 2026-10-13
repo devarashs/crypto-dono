@@ -247,6 +247,27 @@ raids cannot alert.
       tokens are stored; if Kick turns out to drop subscriptions when the user
       token expires, refreshing it becomes a separate item.
 
+## Phase 11 — Live dashboard
+
+Agreed 2026-10-13: one admin page for streaming to Twitch, Kick and YouTube at
+once (OBS multistream), instead of three tabs. Decided: chat read-only; Twitch
+and Kick only (no YouTube); viewers' chat is never saved, only the last few
+hundred messages kept in memory; laid out for a wide browser window.
+
+- [ ] 30. /admin/live, behind the admin password and updating live: an activity
+      feed of follows, subs, gift subs, bits, Kicks, raids, donations with their
+      messages and soundboard purchases, newest first. Platform events are now
+      stored (migration 9) and kept 30 days, so the feed survives a reload.
+- [ ] 31. A status bar: Twitch and Kick live or offline, viewers and uptime,
+      refreshed every 30 s with each app's own token. (Neither platform exposes
+      encoder health; OBS shows that.)
+- [ ] 32. Kick chat in the dashboard, through the existing webhook
+      (chat.message.sent; Reconnect Kick once to add it). Last 300 messages in
+      memory, never stored.
+- [ ] 33. Twitch chat in the dashboard: the server joins the channel's chat
+      anonymously and read-only, reconnecting on its own. Merged with Kick chat
+      in one column, a platform icon on each message; emotes as text for now.
+
 ## Deferred ideas
 
 - Donor-chosen text-to-speech voices (one multi-speaker Piper model, e.g.
