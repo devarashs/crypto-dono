@@ -77,7 +77,7 @@ describe('Kick API', () => {
     expect(kick.calls[1]!.authorization).toBe('Bearer user-token');
   });
 
-  it('subscribes to the five events and reports any Kick refused', async () => {
+  it('subscribes to the alert events and chat, and reports any Kick refused', async () => {
     const kick = fakeKick({
       'POST https://api.kick.com/public/v1/events/subscriptions': (call) => {
         const { events } = JSON.parse(call.body) as { events: { name: string }[] };
@@ -99,6 +99,7 @@ describe('Kick API', () => {
       { event: 'channel.subscription.renewal' },
       { event: 'channel.subscription.gifts' },
       { event: 'kicks.gifted', error: 'missing scope' },
+      { event: 'chat.message.sent' },
     ]);
   });
 

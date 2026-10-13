@@ -99,6 +99,80 @@ setInterval(() => {
   }
 }, 1000);
 
+// ── Chat ──────────────────────────────────────────────────────────────────
+
+const chatList = document.getElementById('chat');
+const chatEmpty = document.getElementById('chat-empty');
+const chatJump = document.getElementById('chat-jump');
+/** Matches the server's buffer, so a long stream does not slow the page down. */
+const maximumChat = 300;
+const seenChatIds = new Set();
+const badgeLabels = { broadcaster: 'Host', moderator: 'Mod', vip: 'VIP', subscriber: 'Sub', og: 'OG', founder: 'Founder' };
+
+/** Viewer colours too dark to read on the dark panel fall back to the text colour. */
+function readableColor(hex) {
+  if (!/^#[0-9a-f]{6}$/i.test(hex ?? '')) return '';
+  const [r, g, b] = [1, 3, 5].map((index) => parseInt(hex.slice(index, index + 2), 16) / 255);
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance < 0.25 ? '' : hex;
+}
+
+function renderChat(message) {
+  const row = document.createElement('li');
+  row.className = `chat__message chat__message--${message.platform}`;
+  const platform = document.createElement('span');
+  platform.className = 'chat__platform';
+  platform.textContent = message.platform === 'kick' ? 'K' : 'T';
+  platform.title = message.platform === 'kick' ? 'Kick' : 'Twitch';
+  row.append(platform);
+  for (const badge of message.badges) {
+    if (!(badge in badgeLabels)) continue;
+    const label = document.createElement('span');
+    label.className = `chat__badge chat__badge--${badge}`;
+    label.textContent = badgeLabels[badge];
+    row.append(label);
+  }
+  const user = document.createElement('span');
+  user.className = 'chat__user';
+  user.textContent = message.user;
+  // A style property set from script, which the policy allows; never markup.
+  const color = readableColor(message.color);
+  if (color !== '') user.style.color = color;
+  const text = document.createElement('span');
+  text.className = 'chat__text';
+  text.textContent = message.text;
+  row.append(user, text);
+  return row;
+}
+
+function isScrolledToBottom() {
+  return chatList.scrollHeight - chatList.scrollTop - chatList.clientHeight < 40;
+}
+
+function scrollChatToBottom() {
+  chatList.scrollTop = chatList.scrollHeight;
+  chatJump.hidden = true;
+}
+
+function addChat(messages) {
+  const stick = isScrolledToBottom();
+  for (const message of messages) {
+    if (seenChatIds.has(message.id)) continue;
+    seenChatIds.add(message.id);
+    chatList.append(renderChat(message));
+  }
+  while (chatList.children.length > maximumChat) chatList.firstElementChild.remove();
+  chatEmpty.hidden = chatList.children.length > 0;
+  // Follow new messages unless the streamer scrolled up to read something.
+  if (stick) scrollChatToBottom();
+  else chatJump.hidden = false;
+}
+
+chatList.addEventListener('scroll', () => {
+  if (isScrolledToBottom()) chatJump.hidden = true;
+});
+chatJump.addEventListener('click', scrollChatToBottom);
+
 function updateEmptyState() {
   empty.hidden = list.children.length > 0;
 }
@@ -127,6 +201,17 @@ stream.addEventListener('snapshot', (event) => {
     }),
   );
   updateEmptyState();
+});
+
+stream.addEventListener('chat-snapshot', (event) => {
+  chatList.replaceChildren();
+  seenChatIds.clear();
+  addChat(JSON.parse(event.data));
+  scrollChatToBottom();
+});
+
+stream.addEventListener('chat', (event) => {
+  addChat([JSON.parse(event.data)]);
 });
 
 stream.addEventListener('status', (event) => {
