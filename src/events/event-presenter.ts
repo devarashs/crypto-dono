@@ -5,7 +5,7 @@
  */
 import type { OverlayAlert, EventSoundCue } from '../alerts/alert-hub.ts';
 import type { BannedWordFilter } from '../alerts/banned-words.ts';
-import { renderHeadline } from '../alerts/headline.ts';
+import { renderHeadline, type HeadlinePart } from '../alerts/headline.ts';
 import type { AlertSound } from '../config.ts';
 import { socialIcons } from '../web/social-icons.ts';
 import { switchFor, type StreamEvent, type StreamEventKind, type SwitchableEventKind } from './stream-event.ts';
@@ -29,32 +29,43 @@ const resubWithoutMonths = '{name} resubscribed';
 /** Numbers are highlighted in the headline, like donation amounts. */
 const emphasisedValues = new Set(['months', 'count', 'bits', 'kicks', 'viewers']);
 
+/**
+ * An event's wording as headline parts: the template for its kind, filled in.
+ * Shared by the overlay alert and the dashboard feed, so both say the same.
+ *
+ * @param actorName The name to show, already masked if it should be.
+ */
+export function eventHeadline(
+  event: StreamEvent,
+  templates: Readonly<Record<StreamEventKind, string>>,
+  actorName: string,
+): HeadlinePart[] {
+  const count = event.count ?? 1;
+  const values: Record<string, string> = {
+    name: actorName,
+    months: formatNumber(event.months ?? 0),
+    count: formatNumber(count),
+    subs: count === 1 ? 'sub' : 'subs',
+    bits: formatNumber(event.bits ?? 0),
+    kicks: formatNumber(event.kicks ?? 0),
+    viewers: formatNumber(event.viewers ?? 0),
+  };
+  const template = event.kind === 'resub' && event.months === undefined ? resubWithoutMonths : templates[event.kind];
+  return renderHeadline(template, values, emphasisedValues);
+}
+
 export function createEventPresenter(settings: EventPresenterSettings, bannedWords: BannedWordFilter): EventPresenter {
   return (event, alertId) => {
     const switchKind = switchFor(event.kind);
     if (!settings.enabled.has(switchKind)) return null;
 
     const actorName = bannedWords.mask(event.actorName);
-    const count = event.count ?? 1;
-    const values: Record<string, string> = {
-      name: actorName,
-      months: formatNumber(event.months ?? 0),
-      count: formatNumber(count),
-      subs: count === 1 ? 'sub' : 'subs',
-      bits: formatNumber(event.bits ?? 0),
-      kicks: formatNumber(event.kicks ?? 0),
-      viewers: formatNumber(event.viewers ?? 0),
-    };
     const icon = event.platform === 'test' ? undefined : socialIcons[event.platform];
 
     return {
       id: alertId,
       kind: event.kind,
-      headline: renderHeadline(
-        event.kind === 'resub' && event.months === undefined ? resubWithoutMonths : settings.templates[event.kind],
-        values,
-        emphasisedValues,
-      ),
+      headline: eventHeadline(event, settings.templates, actorName),
       donorName: actorName,
       message: event.message === undefined ? '' : bannedWords.mask(event.message),
       amount: '',

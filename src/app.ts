@@ -23,6 +23,9 @@ import { registerTwitchWebhookRoutes, twitchWebhookPath } from './routes/twitch-
 import type { TwitchApi } from './twitch/twitch-api.ts';
 import type { KickApi } from './kick/kick-api.ts';
 import type { SubscriptionHealth } from './platforms/subscription-health.ts';
+import { activityFromDonation, activityFromEvent } from './dashboard/activity.ts';
+import { createDashboardHub } from './dashboard/dashboard-hub.ts';
+import type { EventLog } from './events/event-log.ts';
 import type { KickPublicKeySource } from './kick/kick-public-key.ts';
 import { registerKickWebhookRoutes } from './routes/kick-webhook-routes.ts';
 import type { NowPaymentsClient } from './nowpayments/nowpayments-client.ts';
@@ -44,6 +47,8 @@ export type AppDependencies = {
   readonly connections: ConnectionStore;
   /** Present when Twitch is configured: its API client and the EventSub signing secret. */
   readonly twitch?: { readonly api: TwitchApi; readonly eventSubSecret: string };
+  /** Stores platform events for the live dashboard's feed; absent in tests that do not need it. */
+  readonly eventLog?: EventLog;
   /** Whether Twitch and Kick still hold their subscriptions, for the admin page. */
   readonly subscriptionHealth?: Pick<SubscriptionHealth, 'finding' | 'clear'>;
   /** Present when Kick is configured: its API client and where its signing key comes from. */
@@ -147,7 +152,15 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
    * The one way platform events reach overlays.
    * @returns false when the streamer has switched this kind of event off.
    */
+  /** Live dashboard pages; see routes/live-dashboard-routes.ts. */
+  const dashboardHub = createDashboardHub((error) => app.log.error({ err: error }, 'A dashboard listener failed'));
+
   function publishEvent(event: StreamEvent, alertId = `event-${randomUUID()}`): boolean {
+    // Every real event reaches the dashboard, even a kind whose alert is off.
+    if (event.platform !== 'test' && dependencies.eventLog !== undefined) {
+      const stored = dependencies.eventLog.record(event, alertId);
+      dashboardHub.publish({ type: 'activity', item: activityFromEvent(stored, config.events.templates) });
+    }
     const alert = presentEvent(event, alertId);
     if (alert === null) return false;
     dependencies.alertHub.publish(alert);
@@ -190,12 +203,23 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
     registerWebhookRoutes(scope, {
       config,
       donations: dependencies.donations,
-      onDonationAlert: (donation) => publishAlert(presentAlert(donationToAlertSource(donation))),
+      onDonationAlert: (donation) => {
+        publishAlert(presentAlert(donationToAlertSource(donation)));
+        const item = activityFromDonation(donation);
+        if (item !== null) dashboardHub.publish({ type: 'activity', item });
+      },
     });
   });
   app.register(async (scope) => {
     registerOverlayRoutes(scope, {
-      publishEvent,
+      // Test-page events carry a real platform for their badge, so they are kept
+      // out of the dashboard here rather than by platform.
+      publishEvent: (event) => {
+        const alert = presentEvent(event, `test-${randomUUID()}`);
+        if (alert === null) return false;
+        dependencies.alertHub.publish(alert);
+        return true;
+      },
       config,
       donations: dependencies.donations,
       alertHub: dependencies.alertHub,
@@ -252,6 +276,11 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
         }),
         ...(kick !== undefined && { kick: { api: kick.api } }),
         ...(dependencies.subscriptionHealth !== undefined && { subscriptionHealth: dependencies.subscriptionHealth }),
+        dashboard: {
+          hub: dashboardHub,
+          eventTemplates: config.events.templates,
+          ...(dependencies.eventLog !== undefined && { eventLog: dependencies.eventLog }),
+        },
       });
     });
   }

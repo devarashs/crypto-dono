@@ -96,6 +96,7 @@ export function renderAdminDashboard(model: AdminDashboardModel): SafeHtml {
     panel(html`
       <div class="admin-header">
         <h1 class="panel__heading">Donations</h1>
+        <a class="button button--small" href="/admin/live">Open live dashboard</a>
         <form method="post" action="/admin/logout">
           <button class="button button--ghost" type="submit">Sign out</button>
         </form>

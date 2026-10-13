@@ -30,6 +30,7 @@ import { createPkcePair, type KickApi } from '../kick/kick-api.ts';
 import { connectKick, disconnectKick } from '../kick/kick-connection.ts';
 import type { ConnectablePlatform } from '../platforms/connection-store.ts';
 import type { HealthPlatform, SubscriptionHealth } from '../platforms/subscription-health.ts';
+import { registerLiveDashboardRoutes, type LiveDashboardDependencies } from './live-dashboard-routes.ts';
 import type { PlatformStatus } from '../web/admin-pages.ts';
 import type { AlertHub } from '../alerts/alert-hub.ts';
 import { donationToAlertSource, type AlertPresenter, type PresentedAlert } from '../alerts/alert-presenter.ts';
@@ -62,6 +63,8 @@ export type AdminRouteDependencies = {
   };
   /** Present when KICK_CLIENT_ID and KICK_CLIENT_SECRET are set. */
   readonly kick?: { readonly api: KickApi };
+  /** The live dashboard's feed sources. */
+  readonly dashboard: Omit<LiveDashboardDependencies, 'donations'>;
   /** The last subscription health check, shown with each connected platform. */
   readonly subscriptionHealth?: Pick<SubscriptionHealth, 'finding' | 'clear'>;
   readonly now?: () => number;
@@ -308,6 +311,8 @@ export function registerAdminRoutes(app: FastifyInstance, dependencies: AdminRou
       }
     });
   }
+
+  registerLiveDashboardRoutes(app, { ...dependencies.dashboard, donations }, requireAdmin);
 
   app.post<{ Params: { id: string } }>(
     '/admin/donations/:id/replay',
