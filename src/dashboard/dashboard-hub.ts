@@ -5,12 +5,14 @@
  */
 import type { ActivityItem } from './activity.ts';
 import type { ChannelStatus } from './stream-status.ts';
-import type { ChatMessage } from './chat.ts';
+import type { ChatMessage, ChatRemoval } from './chat.ts';
 
 export type DashboardMessage =
   | { readonly type: 'activity'; readonly item: ActivityItem }
   | { readonly type: 'status'; readonly statuses: readonly ChannelStatus[] }
-  | { readonly type: 'chat'; readonly message: ChatMessage };
+  | { readonly type: 'chat'; readonly message: ChatMessage }
+  /** `ids`: the held messages it removed; pages also apply `removal` to what they show. */
+  | { readonly type: 'chat-remove'; readonly removal: ChatRemoval; readonly ids: readonly string[] };
 
 export type DashboardListener = (message: DashboardMessage) => void;
 

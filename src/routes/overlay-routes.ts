@@ -15,6 +15,7 @@
  *   GET  /overlay/:token/test                 form for sending a test alert
  *   POST /overlay/:token/test                 send a test alert to connected overlays
  *   POST /overlay/:token/test/sound           play a soundboard sound as if bought
+ *   GET  /overlay/:token/{chat,viewers,live}  on-stream chat and viewer count (live-overlay-routes.ts)
  *
  * The token in the path is the only credential: OBS cannot send headers or log
  * in, so the URL itself is the secret. A wrong token answers 404 so the overlay's
@@ -33,6 +34,7 @@ import type { AlertSpeech } from '../tts/alert-speech.ts';
 import { validateDonationForm, type DonationFormValues } from '../donations/donation-form.ts';
 import type { DonationRepository } from '../donations/donation-repository.ts';
 import type { LeaderboardQueries } from '../donations/leaderboard.ts';
+import { registerLiveOverlayRoutes, type LiveOverlayDependencies } from './live-overlay-routes.ts';
 import { switchableEventKinds, type StreamEvent, type StreamEventKind } from '../events/stream-event.ts';
 import { formatMoneyForDisplay } from '../money.ts';
 import { html } from '../web/html.ts';
@@ -76,6 +78,8 @@ export type OverlayRouteDependencies = {
   readonly alertSpeech?: AlertSpeech;
   /** Read-only queries behind the on-stream table of biggest donations. */
   readonly leaderboard: LeaderboardQueries;
+  /** Chat and viewer count for stream pages; absent in tests that do not need them. */
+  readonly live?: Omit<LiveOverlayDependencies, 'bannedWords' | 'contentSecurityPolicy'>;
   /** Injected for tests. */
   readonly now?: () => Date;
 };
@@ -151,6 +155,10 @@ export function registerOverlayRoutes(app: FastifyInstance, dependencies: Overla
       renderScenePage({ kind, streamerName: config.streamerName, donateDisplay, socialLinks: sceneSocialLinks }),
     );
   });
+
+  if (dependencies.live !== undefined) {
+    registerLiveOverlayRoutes(app, { ...dependencies.live, bannedWords, contentSecurityPolicy: overlayContentSecurityPolicy });
+  }
 
   app.get<{ Params: TokenParams }>('/overlay/:token/board', async (request, reply) => {
     reply.header('content-security-policy', overlayContentSecurityPolicy);

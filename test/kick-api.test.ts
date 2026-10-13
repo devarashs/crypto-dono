@@ -100,6 +100,7 @@ describe('Kick API', () => {
       { event: 'channel.subscription.gifts' },
       { event: 'kicks.gifted', error: 'missing scope' },
       { event: 'chat.message.sent' },
+      { event: 'moderation.banned' },
     ]);
   });
 

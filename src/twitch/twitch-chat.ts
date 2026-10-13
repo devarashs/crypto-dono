@@ -6,7 +6,7 @@
  * be sent. Docs: https://dev.twitch.tv/docs/chat/irc/ (anonymous connections,
  * tags, PING, RECONNECT).
  */
-import { safeColor, type ChatMessage } from '../dashboard/chat.ts';
+import { safeColor, type ChatMessage, type ChatRemoval } from '../dashboard/chat.ts';
 
 export const twitchChatUrl = 'wss://irc-ws.chat.twitch.tv:443';
 
@@ -69,6 +69,7 @@ export function toChatMessage(message: IrcMessage, now: () => Date = () => new D
     id: `twitch-${message.tags.id || `${login}-${message.tags['tmi-sent-ts'] ?? ''}`}`,
     platform: 'twitch',
     at: Number.isFinite(sentAt) && sentAt > 0 ? new Date(sentAt).toISOString() : now().toISOString(),
+    userId: message.tags['user-id'] || login,
     user: message.tags['display-name'] || login,
     ...(color !== undefined && { color }),
     badges: (message.tags.badges ?? '')
@@ -77,6 +78,22 @@ export function toChatMessage(message: IrcMessage, now: () => Date = () => new D
       .filter((badge) => badge !== ''),
     text,
   };
+}
+
+/**
+ * A moderator's action, from CLEARMSG (one message deleted) or CLEARCHAT (a
+ * viewer timed out or banned, or the whole chat cleared); `null` otherwise.
+ */
+export function toChatRemoval(message: IrcMessage): ChatRemoval | null {
+  if (message.command === 'CLEARMSG') {
+    const target = message.tags['target-msg-id'];
+    return target ? { kind: 'message', id: `twitch-${target}` } : null;
+  }
+  if (message.command === 'CLEARCHAT') {
+    const userId = message.tags['target-user-id'];
+    return userId ? { kind: 'user', platform: 'twitch', userId } : { kind: 'all', platform: 'twitch' };
+  }
+  return null;
 }
 
 /** The parts of the WebSocket API this client uses; injected for tests. */
@@ -91,6 +108,8 @@ export type TwitchChatOptions = {
   /** The channel to read, as its login; `null` while Twitch is not connected. */
   readonly channel: () => string | null;
   readonly onMessage: (message: ChatMessage) => void;
+  /** A moderator removed messages; absent when nothing needs to know. */
+  readonly onRemoval?: (removal: ChatRemoval) => void;
   readonly log?: (message: string) => void;
   readonly openSocket?: (url: string) => ChatSocket;
   /** How often to notice that the channel changed (connected, disconnected). */
@@ -136,6 +155,8 @@ export function createTwitchChatClient(options: TwitchChatOptions) {
         else {
           const chat = toChatMessage(message);
           if (chat !== null) options.onMessage(chat);
+          const removal = toChatRemoval(message);
+          if (removal !== null) options.onRemoval?.(removal);
         }
       }
     });

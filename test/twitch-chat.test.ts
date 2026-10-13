@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatMessage } from '../src/dashboard/chat.ts';
-import { createTwitchChatClient, parseIrcLine, toChatMessage, type ChatSocket } from '../src/twitch/twitch-chat.ts';
+import { createTwitchChatClient, parseIrcLine, toChatMessage, toChatRemoval, type ChatSocket } from '../src/twitch/twitch-chat.ts';
+import type { ChatRemoval } from '../src/dashboard/chat.ts';
 
 const privmsg =
   '@badge-info=subscriber/14;badges=moderator/1,subscriber/12;color=#1E90FF;display-name=NeonRider;emotes=25:6-10;' +
@@ -30,6 +31,7 @@ describe('toChatMessage', () => {
       id: 'twitch-b34ccfc7-4977-403a-8a94-33c6bac34fb8',
       platform: 'twitch',
       at: new Date(1791850000000).toISOString(),
+      userId: '9',
       user: 'NeonRider',
       color: '#1E90FF',
       badges: ['moderator', 'subscriber'],
@@ -43,6 +45,7 @@ describe('toChatMessage', () => {
       id: 'twitch-x',
       platform: 'twitch',
       at: new Date(1).toISOString(),
+      userId: 'quiet',
       user: 'quiet',
       badges: [],
       text: 'waves',
@@ -51,6 +54,20 @@ describe('toChatMessage', () => {
 
   it('ignores everything that is not a chat line', () => {
     expect(toChatMessage(parseIrcLine(':tmi.twitch.tv 001 justinfan123 :Welcome, GLHF!')!)).toBeNull();
+  });
+});
+
+describe('toChatRemoval', () => {
+  it.each([
+    ['@login=troll;target-msg-id=abc;tmi-sent-ts=1 :tmi.twitch.tv CLEARMSG #c :bad words', { kind: 'message', id: 'twitch-abc' }],
+    ['@ban-duration=600;room-id=1;target-user-id=42;tmi-sent-ts=1 :tmi.twitch.tv CLEARCHAT #c :troll', { kind: 'user', platform: 'twitch', userId: '42' }],
+    ['@room-id=1;tmi-sent-ts=1 :tmi.twitch.tv CLEARCHAT #c', { kind: 'all', platform: 'twitch' }],
+  ])('%s', (line, expected) => {
+    expect(toChatRemoval(parseIrcLine(line)!)).toEqual(expected);
+  });
+
+  it('ignores chat lines', () => {
+    expect(toChatRemoval(parseIrcLine(privmsg)!)).toBeNull();
   });
 });
 
@@ -79,7 +96,9 @@ describe('Twitch chat client', () => {
   let sockets: FakeSocket[];
   let channel: string | null;
   let received: ChatMessage[];
+  let removals: ChatRemoval[];
   beforeEach(() => {
+    removals = [];
     vi.useFakeTimers();
     sockets = [];
     channel = 'machinearash';
@@ -93,6 +112,7 @@ describe('Twitch chat client', () => {
     const client = createTwitchChatClient({
       channel: () => channel,
       onMessage: (message) => received.push(message),
+      onRemoval: (removal) => removals.push(removal),
       openSocket: () => {
         const socket = new FakeSocket();
         sockets.push(socket);
@@ -116,6 +136,8 @@ describe('Twitch chat client', () => {
     sockets[0]!.emit('message', `PING :tmi.twitch.tv\r\n${privmsg}\r\n`);
     expect(sockets[0]!.sent.at(-1)).toBe('PONG :tmi.twitch.tv');
     expect(received.map((message) => message.text)).toEqual(['hello Kappa gg']);
+    sockets[0]!.emit('message', '@target-user-id=9 :tmi.twitch.tv CLEARCHAT #machinearash :neonrider\r\n');
+    expect(removals).toEqual([{ kind: 'user', platform: 'twitch', userId: '9' }]);
     client.stop();
   });
 

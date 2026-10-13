@@ -114,12 +114,15 @@ function readableColor(hex) {
   if (!/^#[0-9a-f]{6}$/i.test(hex ?? '')) return '';
   const [r, g, b] = [1, 3, 5].map((index) => parseInt(hex.slice(index, index + 2), 16) / 255);
   const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return luminance < 0.25 ? '' : hex;
+  return luminance < 0.35 ? '' : hex;
 }
 
 function renderChat(message) {
   const row = document.createElement('li');
   row.className = `chat__message chat__message--${message.platform}`;
+  row.dataset.id = message.id;
+  row.dataset.platform = message.platform;
+  row.dataset.userId = message.userId;
   const platform = document.createElement('span');
   platform.className = 'chat__platform';
   platform.textContent = message.platform === 'kick' ? 'K' : 'T';
@@ -212,6 +215,20 @@ stream.addEventListener('chat-snapshot', (event) => {
 
 stream.addEventListener('chat', (event) => {
   addChat([JSON.parse(event.data)]);
+});
+
+/** A moderator removed messages: one, one viewer's, or a platform's whole chat. */
+stream.addEventListener('chat-remove', (event) => {
+  const { removal } = JSON.parse(event.data);
+  for (const row of [...chatList.children]) {
+    const { id, platform, userId } = row.dataset;
+    const removed =
+      (removal.kind === 'message' && id === removal.id) ||
+      (removal.kind === 'user' && platform === removal.platform && userId === removal.userId) ||
+      (removal.kind === 'all' && platform === removal.platform);
+    if (removed) row.remove();
+  }
+  chatEmpty.hidden = chatList.children.length > 0;
 });
 
 stream.addEventListener('status', (event) => {

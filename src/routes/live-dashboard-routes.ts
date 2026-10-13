@@ -69,7 +69,14 @@ export function registerLiveDashboardRoutes(
     // Subscribed before the snapshot is read, so nothing falls in between; the
     // page drops an item it already has.
     const send = (message: DashboardMessage) => {
-      const data = message.type === 'activity' ? message.item : message.type === 'chat' ? message.message : message.statuses;
+      const data =
+        message.type === 'activity'
+          ? message.item
+          : message.type === 'chat'
+            ? message.message
+            : message.type === 'chat-remove'
+              ? { removal: message.removal, ids: message.ids }
+              : message.statuses;
       response.write(`event: ${message.type}\ndata: ${JSON.stringify(data)}\n\n`);
     };
     const unsubscribe = hub.subscribe(send);

@@ -1,7 +1,8 @@
 /**
  * Full-screen stream scenes (Starting Soon, Be Right Back, Ending Soon), each
  * an OBS Browser Source of 1920 × 1080. The page is static; scene.js fills the
- * donor lists from a feed and runs the optional countdown.
+ * donor lists from a feed, runs the optional countdown, and shows chat and the
+ * viewer count from the overlay's live stream.
  */
 import { html, type SafeHtml } from './html.ts';
 import { backdrop, glitchTitle } from './pages.ts';
@@ -37,7 +38,7 @@ export function renderScenePage(model: ScenePageModel): SafeHtml {
     <link rel="stylesheet" href="/static/scene.css">
     <script src="/static/scene.js" type="module"></script>
   </head>
-  <body class="scene scene--${model.kind}" data-feed-url="feed.json" data-refresh-ms="15000"
+  <body class="scene scene--${model.kind}" data-feed-url="feed.json" data-refresh-ms="15000" data-stream-url="../live"
     data-countdown="${model.kind === 'starting-soon' ? 'on' : 'off'}">
     ${backdrop()}
     <main class="scene__stage">
@@ -45,6 +46,7 @@ export function renderScenePage(model: ScenePageModel): SafeHtml {
         ${model.streamerName !== '' && html`<p class="scene__streamer">${model.streamerName}</p>`}
         ${glitchTitle(copy.title)}
         <p class="scene__subtitle">${copy.subtitle}</p>
+        <div class="viewer-pill scene__viewers" id="viewers" hidden></div>
         <p class="scene__countdown" id="countdown" hidden></p>
       </header>
 
@@ -70,6 +72,11 @@ export function renderScenePage(model: ScenePageModel): SafeHtml {
           <p class="scene-list__empty" id="latest-empty" hidden>No donations yet.</p>
         </section>
       </div>
+
+      <section class="scene-panel scene-panel--chat rise-in" aria-label="Chat">
+        <h2 class="scene-panel__title">Chat</h2>
+        <ol class="stream-chat scene-chat" id="chat" aria-live="off"></ol>
+      </section>
 
       ${model.socialLinks.length > 0 &&
       html`<footer class="scene__socials rise-in">

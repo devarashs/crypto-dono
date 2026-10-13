@@ -1,0 +1,30 @@
+/*
+ * The chat and viewer-count Browser Sources: transparent pages holding one
+ * widget each (see stream-widgets.css). Size and place them in OBS.
+ */
+@import url('tokens.css');
+@import url('stream-widgets.css');
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Chat fills the source; the newest message sits at the bottom edge. */
+.chat-overlay .stream-chat {
+  box-sizing: border-box;
+  height: 100vh;
+  padding: var(--space-4);
+}
+
+/* The pill sits in the top-left corner of its source. */
+.viewers-overlay {
+  padding: var(--space-3);
+}
