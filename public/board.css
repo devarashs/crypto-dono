@@ -1,6 +1,8 @@
 /*
  * On-stream table of the biggest donations: a transparent page whose panel
  * fills the Browser Source exactly (designed for 542 × 340, scales with it).
+ * Text is sized from the source's height (vh), so enlarging the source in OBS
+ * enlarges the text with it; ten rows always fit.
  * No fill behind the table, so the camera or game shows through; only the
  * corner brackets mark its edges, and every line of text carries a dark halo.
  * Same design system as everything else; only transform and opacity animate.
@@ -40,7 +42,7 @@ body {
 .board-panel__title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 0.95rem;
+  font-size: 5.6vh;
   font-weight: 800;
   letter-spacing: var(--tracking-wider);
   text-transform: uppercase;
@@ -61,12 +63,12 @@ body {
 
 .board-row {
   display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  grid-template-columns: 2.2em minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-3);
   min-height: 0;
   border-top: 1px solid color-mix(in srgb, var(--color-text-muted) 30%, transparent);
-  font-size: 1rem;
+  font-size: 6vh;
   line-height: 1.1;
 }
 
@@ -111,7 +113,7 @@ body {
   margin: auto 0;
   text-align: center;
   color: var(--color-text-muted);
-  font-size: 0.9rem;
+  font-size: 5vh;
 }
 
 /* A donation that just entered the top 10 settles into place. */
