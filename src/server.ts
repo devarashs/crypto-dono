@@ -18,6 +18,8 @@ import { createKickApi } from './kick/kick-api.ts';
 import { createEventLog } from './events/event-log.ts';
 import { createDashboardHub } from './dashboard/dashboard-hub.ts';
 import { createStreamStatusPoller } from './dashboard/stream-status.ts';
+import { createChatBuffer } from './dashboard/chat.ts';
+import { createTwitchChatClient } from './twitch/twitch-chat.ts';
 import { createSubscriptionHealth } from './platforms/subscription-health.ts';
 import { twitchWebhookPath } from './routes/twitch-webhook-routes.ts';
 import { createKickPublicKeySource } from './kick/kick-public-key.ts';
@@ -74,9 +76,20 @@ const streamStatus = createStreamStatusPoller({
   ...(kickApi !== undefined && { kick: kickApi }),
   onError: (platform, error) => app.log.warn({ err: error, platform }, 'Could not read stream status'),
 });
+// Viewers' chat, in memory only, shared by the Kick webhook and the Twitch reader.
+const chat = createChatBuffer(dashboardHub);
+const twitchChat = createTwitchChatClient({
+  channel: () => {
+    const connection = connections.find('twitch');
+    return connection?.status === 'active' ? connection.accountLogin : null;
+  },
+  onMessage: (message) => chat.add(message),
+  log: (message) => app.log.info(message),
+});
 const app = buildApp(config, {
   dashboardHub,
   streamStatus,
+  chat,
   donations: createDonationRepository(database),
   leaderboard: createLeaderboardQueries(database),
   connections,
@@ -107,6 +120,7 @@ const app = buildApp(config, {
   }),
 });
 app.addHook('onClose', async () => {
+  twitchChat.stop();
   database.close();
 });
 
@@ -154,4 +168,6 @@ async function checkSubscriptions(): Promise<void> {
 }
 setTimeout(() => void checkSubscriptions(), healthCheckDelayMs).unref();
 streamStatus.start();
+// Reads Twitch chat once Twitch is connected; needs no credentials of its own.
+twitchChat.start();
 setInterval(() => void checkSubscriptions(), healthCheckIntervalMs).unref();
