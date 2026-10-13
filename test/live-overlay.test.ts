@@ -124,6 +124,38 @@ describe('chat and viewers on stream', () => {
     expect(defaults.body).toContain('data-max-messages="12"');
   });
 
+  it('lists both Browser Source links on the admin page', async () => {
+    const store = createInMemoryStore();
+    app = buildApp(
+      loadConfig({
+        PUBLIC_BASE_URL: 'https://dono.example.com',
+        NOWPAYMENTS_API_KEY: 'k',
+        NOWPAYMENTS_IPN_SECRET: 's',
+        OVERLAY_TOKEN: token,
+        LOG_LEVEL: 'fatal',
+        ADMIN_PASSWORD: 'correct horse battery staple',
+      }),
+      {
+        donations: store.donations,
+        leaderboard: store.leaderboard,
+        connections: store.connections,
+        nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
+        alertHub: createAlertHub(),
+        adminSessionSecret: 'a'.repeat(64),
+      },
+    );
+    const login = await app.inject({
+      method: 'POST',
+      url: '/admin/login',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: 'password=correct+horse+battery+staple',
+    });
+    const cookie = login.cookies.find((candidate) => candidate.name === 'crypto_dono_admin')!;
+    const page = await app.inject({ method: 'GET', url: '/admin', headers: { cookie: `${cookie.name}=${cookie.value}` } });
+    expect(page.body).toContain(`https://dono.example.com/overlay/${token}/chat`);
+    expect(page.body).toContain(`https://dono.example.com/overlay/${token}/viewers`);
+  });
+
   it('answers 404 without the right token', async () => {
     build();
     for (const page of ['chat', 'viewers', 'live']) {
