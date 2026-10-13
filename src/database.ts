@@ -170,6 +170,31 @@ export const migrations: readonly Migration[] = [
       DROP TABLE twitch_messages;
     `,
   },
+  {
+    version: 9,
+    description: 'Platform events, for the live dashboard feed',
+    sql: `
+      -- Follows, subs, bits, Kicks and raids as they arrived, so the dashboard's
+      -- activity feed survives a reload or restart. Kept 30 days. The viewer's
+      -- name is public on the platform already; messages are what they sent
+      -- with the event (a resub or bits message), never ordinary chat.
+      CREATE TABLE stream_events (
+        id INTEGER PRIMARY KEY,
+        alert_id TEXT NOT NULL UNIQUE,
+        platform TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        actor_name TEXT NOT NULL,
+        months INTEGER,
+        count INTEGER,
+        bits INTEGER,
+        kicks INTEGER,
+        viewers INTEGER,
+        message TEXT,
+        received_at TEXT NOT NULL
+      ) STRICT;
+      CREATE INDEX stream_events_received_at ON stream_events (received_at);
+    `,
+  },
 ];
 
 /** The schema version a freshly opened database ends up at. */
