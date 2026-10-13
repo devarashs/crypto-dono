@@ -4,8 +4,11 @@
  * one process, one streamer.
  */
 import type { ActivityItem } from './activity.ts';
+import type { ChannelStatus } from './stream-status.ts';
 
-export type DashboardMessage = { readonly type: 'activity'; readonly item: ActivityItem };
+export type DashboardMessage =
+  | { readonly type: 'activity'; readonly item: ActivityItem }
+  | { readonly type: 'status'; readonly statuses: readonly ChannelStatus[] };
 
 export type DashboardListener = (message: DashboardMessage) => void;
 

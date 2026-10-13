@@ -13,6 +13,7 @@ export function renderLiveDashboardPage(): SafeHtml {
       <div class="live">
         <header class="live__header">
           <h1 class="panel__heading">Live</h1>
+          <ul class="live__status" id="live-status" aria-label="Stream status"></ul>
           <p class="live__connection" id="live-connection" role="status">Connecting…</p>
           <a class="link" href="/admin">Admin</a>
         </header>

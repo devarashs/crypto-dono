@@ -10,6 +10,7 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
+import type { LiveStatus } from '../twitch/twitch-api.ts';
 
 /** Who the streamer is, subscribing to their events, and their Kicks. */
 export const kickScopes = ['user:read', 'events:subscribe', 'kicks:read'] as const;
@@ -66,6 +67,14 @@ const usersResponseSchema = z.object({
 });
 const subscribeResponseSchema = z.object({
   data: z.array(z.object({ name: z.string(), subscription_id: z.string().nullish(), error: z.string().nullish() }).loose()),
+});
+const channelsSchema = z.object({
+  data: z.array(
+    z.object({
+      stream_title: z.string().nullish(),
+      stream: z.object({ is_live: z.boolean(), viewer_count: z.number().nullish(), start_time: z.string().nullish() }).loose().nullish(),
+    }).loose(),
+  ),
 });
 const subscriptionListSchema = z.object({
   data: z.array(
@@ -172,6 +181,22 @@ export function createKickApi(options: KickApiOptions) {
         await api('subscription list', `/events/subscriptions${query}`, await getAppAccessToken()),
       );
       return list.data.map((entry) => ({ id: entry.id, event: entry.event, broadcasterUserId: String(entry.broadcaster_user_id) }));
+    },
+
+    /** Whether the channel is live now, with viewers and start time when it is. */
+    async getStream(broadcasterUserId: string): Promise<LiveStatus> {
+      const channels = channelsSchema.parse(
+        await api('channel lookup', `/channels?broadcaster_user_id=${encodeURIComponent(broadcasterUserId)}`, await getAppAccessToken()),
+      );
+      const channel = channels.data[0];
+      const stream = channel?.stream;
+      if (stream === null || stream === undefined || !stream.is_live) return { live: false };
+      return {
+        live: true,
+        viewers: stream.viewer_count ?? 0,
+        startedAt: stream.start_time ?? '',
+        title: channel?.stream_title ?? '',
+      };
     },
 
     async deleteSubscriptions(ids: readonly string[]): Promise<void> {

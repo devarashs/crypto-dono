@@ -50,6 +50,55 @@ function renderItem(item) {
   return row;
 }
 
+const statusList = document.getElementById('live-status');
+const platformNames = { twitch: 'Twitch', kick: 'Kick' };
+const numberFormat = new Intl.NumberFormat();
+
+/** "1:05:09" from a start time; empty when unknown. */
+function uptime(startedAt) {
+  const started = Date.parse(startedAt);
+  if (Number.isNaN(started)) return '';
+  const seconds = Math.max(0, Math.floor((Date.now() - started) / 1000));
+  const parts = [Math.floor(seconds / 3600), Math.floor((seconds % 3600) / 60), seconds % 60];
+  return `${parts[0]}:${String(parts[1]).padStart(2, '0')}:${String(parts[2]).padStart(2, '0')}`;
+}
+
+const stateLabels = { live: 'Live', offline: 'Offline', 'not-connected': 'Not connected', unknown: 'Unavailable' };
+
+function renderStatuses(statuses) {
+  statusList.replaceChildren(
+    ...statuses.map((status) => {
+      const chip = document.createElement('li');
+      chip.className = `status-chip status-chip--${status.platform} status-chip--${status.state}`;
+      const name = document.createElement('span');
+      name.className = 'status-chip__platform';
+      name.textContent = platformNames[status.platform] ?? status.platform;
+      const state = document.createElement('span');
+      state.className = 'status-chip__state';
+      state.textContent = stateLabels[status.state] ?? status.state;
+      chip.append(name, state);
+      if (status.state === 'live') {
+        const viewers = document.createElement('span');
+        viewers.textContent = `${numberFormat.format(status.viewers ?? 0)} watching`;
+        const time = document.createElement('span');
+        time.className = 'status-chip__uptime';
+        time.dataset.startedAt = status.startedAt ?? '';
+        time.textContent = uptime(status.startedAt);
+        chip.append(viewers, time);
+        if (status.title) chip.title = status.title;
+      }
+      return chip;
+    }),
+  );
+}
+
+// Uptime ticks between the 30-second status updates.
+setInterval(() => {
+  for (const time of statusList.querySelectorAll('.status-chip__uptime')) {
+    time.textContent = uptime(time.dataset.startedAt);
+  }
+}, 1000);
+
 function updateEmptyState() {
   empty.hidden = list.children.length > 0;
 }
@@ -78,6 +127,10 @@ stream.addEventListener('snapshot', (event) => {
     }),
   );
   updateEmptyState();
+});
+
+stream.addEventListener('status', (event) => {
+  renderStatuses(JSON.parse(event.data));
 });
 
 stream.addEventListener('activity', (event) => {

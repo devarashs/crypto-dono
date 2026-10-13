@@ -7,7 +7,8 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { activityFromDonation, activityFromEvent, mergeActivity, type ActivityItem } from '../dashboard/activity.ts';
-import type { DashboardHub } from '../dashboard/dashboard-hub.ts';
+import type { DashboardHub, DashboardMessage } from '../dashboard/dashboard-hub.ts';
+import type { StreamStatusPoller } from '../dashboard/stream-status.ts';
 import type { DonationRepository } from '../donations/donation-repository.ts';
 import type { EventLog } from '../events/event-log.ts';
 import type { StreamEventKind } from '../events/stream-event.ts';
@@ -21,6 +22,8 @@ export type LiveDashboardDependencies = {
   /** Absent only in tests that do not store events. */
   readonly eventLog?: EventLog;
   readonly eventTemplates: Readonly<Record<StreamEventKind, string>>;
+  /** The status bar's source; absent when neither Twitch nor Kick is set up. */
+  readonly streamStatus?: Pick<StreamStatusPoller, 'current' | 'refresh'>;
 };
 
 /** How much history the page starts with. */
@@ -32,7 +35,7 @@ export function registerLiveDashboardRoutes(
   dependencies: LiveDashboardDependencies,
   requireAdmin: (request: FastifyRequest, reply: FastifyReply) => Promise<unknown>,
 ): void {
-  const { hub, donations, eventLog, eventTemplates } = dependencies;
+  const { hub, donations, eventLog, eventTemplates, streamStatus } = dependencies;
 
   function recentActivity(): ActivityItem[] {
     const events = (eventLog?.recent(snapshotSize) ?? []).map((event) => activityFromEvent(event, eventTemplates));
@@ -62,10 +65,17 @@ export function registerLiveDashboardRoutes(
 
     // Subscribed before the snapshot is read, so nothing falls in between; the
     // page drops an item it already has.
-    const unsubscribe = hub.subscribe((message) => {
-      response.write(`event: ${message.type}\ndata: ${JSON.stringify(message.item)}\n\n`);
-    });
+    const send = (message: DashboardMessage) => {
+      const data = message.type === 'activity' ? message.item : message.statuses;
+      response.write(`event: ${message.type}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+    const unsubscribe = hub.subscribe(send);
     response.write(`event: snapshot\ndata: ${JSON.stringify(recentActivity())}\n\n`);
+    if (streamStatus !== undefined) {
+      // The last known status at once, then a fresh one for everyone watching.
+      send({ type: 'status', statuses: streamStatus.current() });
+      void streamStatus.refresh();
+    }
     const heartbeat = setInterval(() => response.write(': heartbeat\n\n'), heartbeatIntervalMs);
     request.raw.on('close', () => {
       clearInterval(heartbeat);
