@@ -441,6 +441,64 @@ a.tabs__tab:hover {
   margin: 0;
 }
 
+.live__status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.status-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.status-chip--twitch .status-chip__platform {
+  color: var(--color-twitch);
+}
+
+.status-chip--kick .status-chip__platform {
+  color: var(--color-kick);
+}
+
+/* A dot before the state; filled only while live. */
+.status-chip__state::before {
+  content: '';
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: var(--space-1);
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  vertical-align: 0.05em;
+}
+
+.status-chip--live {
+  border-color: var(--color-danger);
+  color: var(--color-text);
+}
+
+.status-chip--live .status-chip__state {
+  color: var(--color-danger);
+}
+
+.status-chip--live .status-chip__state::before {
+  background: currentColor;
+}
+
+.status-chip--unknown .status-chip__state {
+  color: var(--color-danger);
+}
+
 .live__connection {
   margin: 0 auto 0 0;
   font-size: var(--text-sm);

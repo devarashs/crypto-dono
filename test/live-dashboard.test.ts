@@ -160,6 +160,39 @@ describe('live dashboard', () => {
     expect(store.eventLog.recent(10).map((event) => event.alertId)).toContain('twitch-m1');
   });
 
+  it('sends the last known stream status on connect, and asks for a fresh one', async () => {
+    store = createInMemoryStore();
+    let refreshes = 0;
+    app = buildApp(
+      loadConfig({
+        PUBLIC_BASE_URL: 'https://dono.example.com',
+        NOWPAYMENTS_API_KEY: 'k',
+        NOWPAYMENTS_IPN_SECRET: 's',
+        OVERLAY_TOKEN: 'overlay-token-for-tests-0123456789',
+        LOG_LEVEL: 'fatal',
+        ADMIN_PASSWORD: password,
+      }),
+      {
+        donations: store.donations,
+        leaderboard: store.leaderboard,
+        connections: store.connections,
+        nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
+        alertHub: createAlertHub(),
+        adminSessionSecret: 'a'.repeat(64),
+        streamStatus: {
+          current: () => [{ platform: 'twitch', state: 'live', login: 'machinearash', viewers: 42, startedAt: 't0', title: 'chill' }],
+          refresh: async () => void refreshes++,
+        },
+      },
+    );
+    const stream = await openStream(await signIn());
+    await stream.waitFor('status');
+    expect(stream.blocks('status')[0]).toEqual([
+      { platform: 'twitch', state: 'live', login: 'machinearash', viewers: 42, startedAt: 't0', title: 'chill' },
+    ]);
+    expect(refreshes).toBe(1);
+  });
+
   it('still records an event whose alert is switched off', async () => {
     build({ EVENT_ALERTS: 'none' });
     store.connections.connect('twitch', '111', 'machinearash');

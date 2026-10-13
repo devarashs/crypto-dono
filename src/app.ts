@@ -24,7 +24,8 @@ import type { TwitchApi } from './twitch/twitch-api.ts';
 import type { KickApi } from './kick/kick-api.ts';
 import type { SubscriptionHealth } from './platforms/subscription-health.ts';
 import { activityFromDonation, activityFromEvent } from './dashboard/activity.ts';
-import { createDashboardHub } from './dashboard/dashboard-hub.ts';
+import { createDashboardHub, type DashboardHub } from './dashboard/dashboard-hub.ts';
+import type { StreamStatusPoller } from './dashboard/stream-status.ts';
 import type { EventLog } from './events/event-log.ts';
 import type { KickPublicKeySource } from './kick/kick-public-key.ts';
 import { registerKickWebhookRoutes } from './routes/kick-webhook-routes.ts';
@@ -47,6 +48,10 @@ export type AppDependencies = {
   readonly connections: ConnectionStore;
   /** Present when Twitch is configured: its API client and the EventSub signing secret. */
   readonly twitch?: { readonly api: TwitchApi; readonly eventSubSecret: string };
+  /** Fan-out to open dashboards; made here unless the server shares one with the status poller. */
+  readonly dashboardHub?: DashboardHub;
+  /** The dashboard status bar's source. */
+  readonly streamStatus?: Pick<StreamStatusPoller, 'current' | 'refresh'>;
   /** Stores platform events for the live dashboard's feed; absent in tests that do not need it. */
   readonly eventLog?: EventLog;
   /** Whether Twitch and Kick still hold their subscriptions, for the admin page. */
@@ -153,7 +158,8 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
    * @returns false when the streamer has switched this kind of event off.
    */
   /** Live dashboard pages; see routes/live-dashboard-routes.ts. */
-  const dashboardHub = createDashboardHub((error) => app.log.error({ err: error }, 'A dashboard listener failed'));
+  const dashboardHub =
+    dependencies.dashboardHub ?? createDashboardHub((error) => app.log.error({ err: error }, 'A dashboard listener failed'));
 
   function publishEvent(event: StreamEvent, alertId = `event-${randomUUID()}`): boolean {
     // Every real event reaches the dashboard, even a kind whose alert is off.
@@ -279,6 +285,7 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
         dashboard: {
           hub: dashboardHub,
           eventTemplates: config.events.templates,
+          ...(dependencies.streamStatus !== undefined && { streamStatus: dependencies.streamStatus }),
           ...(dependencies.eventLog !== undefined && { eventLog: dependencies.eventLog }),
         },
       });

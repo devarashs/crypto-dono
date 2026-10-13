@@ -16,6 +16,8 @@ import { createConnectionStore } from './platforms/connection-store.ts';
 import { createTwitchApi } from './twitch/twitch-api.ts';
 import { createKickApi } from './kick/kick-api.ts';
 import { createEventLog } from './events/event-log.ts';
+import { createDashboardHub } from './dashboard/dashboard-hub.ts';
+import { createStreamStatusPoller } from './dashboard/stream-status.ts';
 import { createSubscriptionHealth } from './platforms/subscription-health.ts';
 import { twitchWebhookPath } from './routes/twitch-webhook-routes.ts';
 import { createKickPublicKeySource } from './kick/kick-public-key.ts';
@@ -63,7 +65,18 @@ const subscriptionHealth = createSubscriptionHealth({
   ...(twitchApi !== undefined && { twitch: { api: twitchApi, callbackUrl: `${config.publicBaseUrl}${twitchWebhookPath}` } }),
   ...(kickApi !== undefined && { kick: { api: kickApi } }),
 });
+// Shared by the app (which publishes activity) and the status poller.
+const dashboardHub = createDashboardHub((error) => console.error('A dashboard listener failed', error));
+const streamStatus = createStreamStatusPoller({
+  connections,
+  hub: dashboardHub,
+  ...(twitchApi !== undefined && { twitch: twitchApi }),
+  ...(kickApi !== undefined && { kick: kickApi }),
+  onError: (platform, error) => app.log.warn({ err: error, platform }, 'Could not read stream status'),
+});
 const app = buildApp(config, {
+  dashboardHub,
+  streamStatus,
   donations: createDonationRepository(database),
   leaderboard: createLeaderboardQueries(database),
   connections,
@@ -140,4 +153,5 @@ async function checkSubscriptions(): Promise<void> {
   }
 }
 setTimeout(() => void checkSubscriptions(), healthCheckDelayMs).unref();
+streamStatus.start();
 setInterval(() => void checkSubscriptions(), healthCheckIntervalMs).unref();
