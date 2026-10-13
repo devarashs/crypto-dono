@@ -254,10 +254,13 @@ once (OBS multistream), instead of three tabs. Decided: chat read-only; Twitch
 and Kick only (no YouTube); viewers' chat is never saved, only the last few
 hundred messages kept in memory; laid out for a wide browser window.
 
-- [ ] 30. /admin/live, behind the admin password and updating live: an activity
+- [x] 30. /admin/live, behind the admin password and updating live: an activity
       feed of follows, subs, gift subs, bits, Kicks, raids, donations with their
       messages and soundboard purchases, newest first. Platform events are now
       stored (migration 9) and kept 30 days, so the feed survives a reload.
+      Verified in Chromium at 1440 px: the snapshot listed seeded follows, a
+      raid, gift subs, Kicks with a message, a donation and a sound; a signed
+      follow sent to the Twitch webhook appeared at the top without a reload.
 - [ ] 31. A status bar: Twitch and Kick live or offline, viewers and uptime,
       refreshed every 30 s with each app's own token. (Neither platform exposes
       encoder health; OBS shows that.)

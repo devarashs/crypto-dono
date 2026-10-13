@@ -402,6 +402,165 @@ a.tabs__tab:hover {
 
 /* ── Admin ─────────────────────────────────────────────────────────────── */
 
+/* ── Live dashboard ────────────────────────────────────────────────────── */
+
+/* The dashboard uses the whole window: it lives on a second monitor. */
+.page:has(> .live) {
+  max-width: none;
+  padding-block: var(--space-5);
+}
+
+.live {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-areas:
+    'header header'
+    'chat activity';
+  gap: var(--space-4);
+  /* Panels fill the window and scroll inside, so the header stays put. */
+  height: calc(100dvh - 2 * var(--space-5));
+  min-height: 30rem;
+}
+
+@media (max-width: 60rem) {
+  .live {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'header' 'activity' 'chat';
+    height: auto;
+  }
+}
+
+.live__header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.live__header .panel__heading {
+  margin: 0;
+}
+
+.live__connection {
+  margin: 0 auto 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.live__connection[data-state='live'] {
+  color: var(--color-accent);
+}
+
+.live__connection[data-state='down'] {
+  color: var(--color-danger);
+}
+
+.live__panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.live__panel--chat {
+  grid-area: chat;
+}
+
+.live__panel--activity {
+  grid-area: activity;
+}
+
+.activity {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activity__item {
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-void);
+}
+
+.activity__item--twitch {
+  border-left-color: var(--color-twitch);
+}
+
+.activity__item--kick {
+  border-left-color: var(--color-kick);
+}
+
+.activity__item--donation,
+.activity__item--sound {
+  border-left-color: var(--color-accent);
+}
+
+.activity__meta {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.activity__item--twitch .activity__source {
+  color: var(--color-twitch);
+}
+
+.activity__item--kick .activity__source {
+  color: var(--color-kick);
+}
+
+.activity__item--donation .activity__source,
+.activity__item--sound .activity__source {
+  color: var(--color-accent);
+}
+
+.activity__headline {
+  margin: var(--space-1) 0 0;
+  overflow-wrap: anywhere;
+}
+
+.activity__headline strong {
+  color: var(--color-accent);
+  font-weight: 400;
+}
+
+.activity__message {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+/* A new item settles in; nothing moves for people who asked for less motion. */
+@keyframes activity-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+.activity__item.is-new {
+  animation: activity-enter var(--motion-fast) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activity__item.is-new {
+    animation: none;
+  }
+}
+
 .admin-header {
   display: flex;
   flex-wrap: wrap;

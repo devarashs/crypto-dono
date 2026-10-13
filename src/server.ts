@@ -15,6 +15,7 @@ import { createLeaderboardQueries } from './donations/leaderboard.ts';
 import { createConnectionStore } from './platforms/connection-store.ts';
 import { createTwitchApi } from './twitch/twitch-api.ts';
 import { createKickApi } from './kick/kick-api.ts';
+import { createEventLog } from './events/event-log.ts';
 import { createSubscriptionHealth } from './platforms/subscription-health.ts';
 import { twitchWebhookPath } from './routes/twitch-webhook-routes.ts';
 import { createKickPublicKeySource } from './kick/kick-public-key.ts';
@@ -66,6 +67,7 @@ const app = buildApp(config, {
   donations: createDonationRepository(database),
   leaderboard: createLeaderboardQueries(database),
   connections,
+  eventLog: createEventLog(database),
   subscriptionHealth,
   // The EventSub signing secret lives next to the database, like the session key.
   ...(twitchApi !== undefined && {

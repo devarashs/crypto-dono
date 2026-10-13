@@ -53,6 +53,9 @@
   --color-rank-1: #ffd166;
   --color-rank-2: #cfd3e6;
   --color-rank-3: #e0a172;
+  /* Platform colours, for small labels only (the dashboard), never surfaces. */
+  --color-twitch: #b38bff;
+  --color-kick: #53fc18;
 
   --color-accent-faint: color-mix(in srgb, var(--color-accent) 14%, transparent);
   --color-accent-soft: color-mix(in srgb, var(--color-accent) 32%, transparent);
