@@ -209,6 +209,22 @@ export const migrations: readonly Migration[] = [
       CREATE INDEX admin_sessions_expires_at ON admin_sessions (expires_at);
     `,
   },
+  {
+    version: 11,
+    description: 'The latest chat messages, for the dashboard after a restart',
+    sql: `
+      -- Only the newest few hundred are kept (the dashboard's buffer); older rows
+      -- are deleted as new ones arrive, and a moderator's removal deletes too.
+      CREATE TABLE chat_messages (
+        seq INTEGER PRIMARY KEY,
+        id TEXT NOT NULL UNIQUE,
+        platform TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        message TEXT NOT NULL
+      ) STRICT;
+      CREATE INDEX chat_messages_user ON chat_messages (platform, user_id);
+    `,
+  },
 ];
 
 /** The schema version a freshly opened database ends up at. */

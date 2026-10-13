@@ -20,6 +20,7 @@ import { createEventLog } from './events/event-log.ts';
 import { createDashboardHub } from './dashboard/dashboard-hub.ts';
 import { createStreamStatusPoller } from './dashboard/stream-status.ts';
 import { createChatBuffer } from './dashboard/chat.ts';
+import { createChatStore } from './dashboard/chat-store.ts';
 import { createTwitchChatClient } from './twitch/twitch-chat.ts';
 import { createSubscriptionHealth } from './platforms/subscription-health.ts';
 import { twitchWebhookPath } from './routes/twitch-webhook-routes.ts';
@@ -77,8 +78,9 @@ const streamStatus = createStreamStatusPoller({
   ...(kickApi !== undefined && { kick: kickApi }),
   onError: (platform, error) => app.log.warn({ err: error, platform }, 'Could not read stream status'),
 });
-// Viewers' chat, in memory only, shared by the Kick webhook and the Twitch reader.
-const chat = createChatBuffer(dashboardHub);
+// Viewers' chat, the latest few hundred kept in the database; shared by the
+// Kick webhook and the Twitch reader.
+const chat = createChatBuffer(dashboardHub, { store: createChatStore(database) });
 const twitchChat = createTwitchChatClient({
   channel: () => {
     const connection = connections.find('twitch');

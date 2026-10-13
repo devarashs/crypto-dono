@@ -1,10 +1,9 @@
 /**
- * Chat for the live dashboard: messages from Twitch and Kick in one shape, and
- * an in-memory buffer of the latest few hundred.
- *
- * Never written to disk: the streamer chose (2026-10-13) that viewers' chat is
- * not stored. A restart empties the buffer; that is the point.
+ * Chat for the live dashboard and stream pages: messages from Twitch and Kick
+ * in one shape, and a buffer of the latest few hundred, mirrored to the
+ * database (chat-store.ts) when one is given so a restart keeps them.
  */
+import type { ChatStore } from './chat-store.ts';
 import type { DashboardHub } from './dashboard-hub.ts';
 
 export type ChatMessage = {
@@ -46,11 +45,21 @@ function isRemovedBy(message: ChatMessage, removal: ChatRemoval): boolean {
 
 export type ChatBuffer = ReturnType<typeof createChatBuffer>;
 
-export function createChatBuffer(hub: DashboardHub, size = chatBufferSize) {
-  const messages: ChatMessage[] = [];
+/**
+ * @param store Where messages survive a restart; the buffer starts from it.
+ *   Without one (tests), chat lives in memory only.
+ */
+export function createChatBuffer(
+  hub: DashboardHub,
+  options: { readonly size?: number; readonly store?: Pick<ChatStore, 'save' | 'remove' | 'recent'> } = {},
+) {
+  const size = options.size ?? chatBufferSize;
+  const { store } = options;
+  const messages: ChatMessage[] = store?.recent().slice(-size) ?? [];
   return {
     /** Keeps the message and sends it to open dashboards. */
     add(message: ChatMessage): void {
+      store?.save(message);
       messages.push(message);
       if (messages.length > size) messages.splice(0, messages.length - size);
       hub.publish({ type: 'chat', message });
@@ -61,6 +70,7 @@ export function createChatBuffer(hub: DashboardHub, size = chatBufferSize) {
      * a page may show more than the buffer keeps.
      */
     remove(removal: ChatRemoval): void {
+      store?.remove(removal);
       const removedIds = messages.filter((message) => isRemovedBy(message, removal)).map((message) => message.id);
       for (let index = messages.length - 1; index >= 0; index -= 1) {
         if (isRemovedBy(messages[index]!, removal)) messages.splice(index, 1);

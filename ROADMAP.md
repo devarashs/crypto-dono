@@ -307,7 +307,7 @@ Requested 2026-10-14.
       database (hashed ids only), sliding expiry of 14 days without a visit.
       (Asked for as "refresh tokens"; for a cookie session the equivalent is a
       persistent server-side session, so no token is handed to the browser.)
-- [ ] 39. The latest 300 chat messages are kept in the database, so a restart
+- [x] 39. The latest 300 chat messages are kept in the database, so a restart
       does not empty the dashboard. Reverses the 2026-10-13 "never stored"
       decision at the streamer's request; moderators' removals delete rows too.
 - [ ] 40. Twitch and Kick emotes shown as images on the dashboard, the chat
