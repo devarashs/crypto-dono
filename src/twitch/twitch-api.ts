@@ -37,6 +37,11 @@ export type TwitchSubscription = {
   readonly callback: string | null;
 };
 
+/** A channel's live state, as the dashboard shows it. */
+export type LiveStatus =
+  | { readonly live: false }
+  | { readonly live: true; readonly viewers: number; readonly startedAt: string; readonly title: string };
+
 export type TwitchApiOptions = {
   readonly clientId: string;
   readonly clientSecret: string;
@@ -53,6 +58,11 @@ const subscriptionSchema = z.object({
   type: z.string(),
   status: z.string(),
   transport: z.object({ callback: z.string().optional() }).loose(),
+});
+const streamsSchema = z.object({
+  data: z.array(
+    z.object({ type: z.string(), viewer_count: z.number(), started_at: z.string(), title: z.string().optional() }).loose(),
+  ),
 });
 const subscriptionListSchema = z.object({
   data: z.array(subscriptionSchema),
@@ -167,6 +177,17 @@ export function createTwitchApi(options: TwitchApiOptions) {
         if (cursor === undefined) break;
       }
       return all;
+    },
+
+    /** Whether the channel is live now, with viewers and start time when it is. */
+    async getStream(broadcasterId: string): Promise<LiveStatus> {
+      const streams = streamsSchema.parse(
+        await helix('stream lookup', `/streams?user_id=${encodeURIComponent(broadcasterId)}`),
+      );
+      const stream = streams.data.find((entry) => entry.type === 'live');
+      return stream === undefined
+        ? { live: false }
+        : { live: true, viewers: stream.viewer_count, startedAt: stream.started_at, title: stream.title ?? '' };
     },
 
     async deleteSubscription(id: string): Promise<void> {

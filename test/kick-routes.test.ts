@@ -31,6 +31,7 @@ function fakeKickApi(): Context['api'] {
     subscribe: vi.fn(async () => [{ event: 'channel.followed' }]),
     listSubscriptions: vi.fn(async () => []),
     deleteSubscriptions: vi.fn(async () => {}),
+    getStream: vi.fn(async () => ({ live: false })),
   };
 }
 
