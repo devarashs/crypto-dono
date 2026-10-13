@@ -11,8 +11,9 @@
  *   GET  /admin/{twitch,kick}/callback    where the platform sends the streamer back
  *   POST /admin/{twitch,kick}/disconnect  unlink the channel and stop its alerts
  *
- * Sessions are @fastify/session's, kept in memory: a restart signs the admin
- * out, which is acceptable for one person and avoids a session store. The
+ * Sessions are @fastify/session's, kept in the database (admin/session-store.ts)
+ * so restarts and deploys do not sign the admin out; they end after 14 days
+ * without a visit (rolling: each admin request extends them). The
  * cookie is scoped to /admin and HttpOnly. Over HTTPS it is Secure and
  * SameSite=Strict; over plain HTTP (localhost) the library lowers it to
  * SameSite=Lax. Both keep the cookie off cross-site POST requests, and every
@@ -53,6 +54,8 @@ export type AdminRouteDependencies = {
   readonly publishAlert: (presented: PresentedAlert) => void;
   /** Signs the session cookie; at least 32 characters. */
   readonly sessionSecret: string;
+  /** Where sign-ins are kept; in memory when absent (tests). */
+  readonly sessionStore?: fastifySession.SessionStore;
   readonly connections: ConnectionStore;
   /** Present when TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET are set. */
   readonly twitch?: {
@@ -73,7 +76,8 @@ export type AdminRouteDependencies = {
 /** How long a Connect click stays valid while the streamer is on the platform's site. */
 const oauthStateLifetimeMs = 10 * 60 * 1000;
 
-const sessionLifetimeMs = 12 * 60 * 60 * 1000;
+/** Signed out after this long without a visit; each admin request restarts it. */
+const sessionLifetimeMs = 14 * 24 * 60 * 60 * 1000;
 const donationsPerPage = 25;
 
 /** Fixed messages, chosen by code, so nothing from the URL is echoed onto the page. */
@@ -142,6 +146,9 @@ export function registerAdminRoutes(app: FastifyInstance, dependencies: AdminRou
   app.register(fastifySession, {
     secret: dependencies.sessionSecret,
     cookieName: 'crypto_dono_admin',
+    ...(dependencies.sessionStore !== undefined && { store: dependencies.sessionStore }),
+    // Saved, with a fresh expiry, on every admin response: the expiry slides.
+    rolling: true,
     // No cookie at all until someone signs in.
     saveUninitialized: false,
     cookie: {

@@ -15,6 +15,7 @@ import { createLeaderboardQueries } from './donations/leaderboard.ts';
 import { createConnectionStore } from './platforms/connection-store.ts';
 import { createTwitchApi } from './twitch/twitch-api.ts';
 import { createKickApi } from './kick/kick-api.ts';
+import { createSqliteSessionStore } from './admin/session-store.ts';
 import { createEventLog } from './events/event-log.ts';
 import { createDashboardHub } from './dashboard/dashboard-hub.ts';
 import { createStreamStatusPoller } from './dashboard/stream-status.ts';
@@ -111,6 +112,7 @@ const app = buildApp(config, {
   // Next to the database, so it lives in the same persistent volume.
   ...(config.adminPassword !== null && {
     adminSessionSecret: loadOrCreateSessionSecret(join(dirname(config.databasePath), 'session-secret')),
+    adminSessionStore: createSqliteSessionStore(database),
   }),
   alertHub: createAlertHub((error) => app.log.error({ err: error }, 'An overlay listener failed')),
   ...(config.tts !== null && {

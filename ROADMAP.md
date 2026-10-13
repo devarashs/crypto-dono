@@ -303,7 +303,7 @@ Twitch and Kick only (YouTube is not connected).
 
 Requested 2026-10-14.
 
-- [ ] 38. Admin sign-ins survive restarts and deploys: sessions kept in the
+- [x] 38. Admin sign-ins survive restarts and deploys: sessions kept in the
       database (hashed ids only), sliding expiry of 14 days without a visit.
       (Asked for as "refresh tokens"; for a cookie session the equivalent is a
       persistent server-side session, so no token is handed to the browser.)

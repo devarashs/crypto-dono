@@ -7,6 +7,7 @@
 import { fileURLToPath } from 'node:url';
 import formBody from '@fastify/formbody';
 import rateLimit from '@fastify/rate-limit';
+import type fastifySession from '@fastify/session';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { AlertHub } from './alerts/alert-hub.ts';
@@ -68,6 +69,8 @@ export type AppDependencies = {
   readonly alertSpeech?: AlertSpeech;
   /** Signs admin session cookies; required when ADMIN_PASSWORD is set. */
   readonly adminSessionSecret?: string;
+  /** Keeps admin sign-ins across restarts; in memory when absent (tests). */
+  readonly adminSessionStore?: fastifySession.SessionStore;
 };
 
 const publicDirectory = fileURLToPath(new URL('../public/', import.meta.url));
@@ -292,6 +295,7 @@ export function buildApp(config: Config, dependencies: AppDependencies): Fastify
         presentAlert,
         publishAlert,
         sessionSecret,
+        ...(dependencies.adminSessionStore !== undefined && { sessionStore: dependencies.adminSessionStore }),
         connections: dependencies.connections,
         ...(twitch !== undefined && {
           twitch: { ...twitch, callbackUrl: `${config.publicBaseUrl}${twitchWebhookPath}` },
