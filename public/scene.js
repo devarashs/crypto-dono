@@ -7,6 +7,8 @@
  * it restarts every time you switch to the scene.
  */
 import { createLiveList, pollJson, textElement } from './live-list.js';
+import { connectLiveStream } from './live-stream.js';
+import { createStreamChat, renderViewerCount } from './stream-widgets.js';
 
 const settings = document.body.dataset;
 const feedUrl = new URL(settings.feedUrl, window.location.href);
@@ -59,3 +61,14 @@ function startCountdown() {
   };
   tick();
 }
+
+// Chat and the viewer count, from the overlay's live stream. Messages stay on a
+// scene (no fade): it is what people watch while you are away.
+const chat = createStreamChat(document.getElementById('chat'), { maxMessages: 14, fadeSeconds: 0 });
+const viewers = document.getElementById('viewers');
+connectLiveStream(settings.streamUrl, {
+  chatSnapshot: chat.snapshot,
+  chat: chat.add,
+  chatRemove: chat.remove,
+  status: (statuses) => renderViewerCount(viewers, statuses),
+});
