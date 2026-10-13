@@ -4,6 +4,44 @@
  * only; the server has already masked banned words.
  */
 
+/** Emote images only ever come from the platforms' own CDNs. */
+const emoteOrigins = new Set(['https://static-cdn.jtvnw.net', 'https://files.kick.com']);
+
+/**
+ * Fills `element` with a message's text: emotes as images (their name as alt
+ * text, and as plain text if an image fails), everything else as text.
+ */
+export function fillChatText(element, message) {
+  if (!Array.isArray(message.fragments)) {
+    element.textContent = message.text;
+    return;
+  }
+  for (const fragment of message.fragments) {
+    if (typeof fragment.text === 'string') {
+      element.append(fragment.text);
+      continue;
+    }
+    let url;
+    try {
+      url = new URL(fragment.url);
+    } catch {
+      element.append(fragment.emote);
+      continue;
+    }
+    if (!emoteOrigins.has(url.origin)) {
+      element.append(fragment.emote);
+      continue;
+    }
+    const image = document.createElement('img');
+    image.className = 'chat-emote';
+    image.src = url.href;
+    image.alt = fragment.emote;
+    image.title = fragment.emote;
+    image.addEventListener('error', () => image.replaceWith(fragment.emote), { once: true });
+    element.append(image);
+  }
+}
+
 /** Too-dark viewer colours fall back to the stylesheet's colour. */
 function readableColor(hex) {
   if (!/^#[0-9a-f]{6}$/i.test(hex ?? '')) return '';
@@ -53,7 +91,7 @@ export function createStreamChat(list, { maxMessages, fadeSeconds }) {
     if (color !== '') user.style.color = color;
     const text = document.createElement('span');
     text.className = 'stream-chat__text';
-    text.textContent = message.text;
+    fillChatText(text, message);
     row.append(platform, user, text);
     return row;
   }

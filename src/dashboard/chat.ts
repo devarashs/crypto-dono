@@ -21,7 +21,18 @@ export type ChatMessage = {
   readonly badges: readonly string[];
   /** The text, with emotes written as their names. */
   readonly text: string;
+  /**
+   * The same text split into plain runs and emotes, for drawing emotes as
+   * images; absent when the message has no emotes (or predates them).
+   */
+  readonly fragments?: readonly ChatFragment[];
 };
+
+/** A run of text, or one emote with its image on the platform's CDN. */
+export type ChatFragment = { readonly text: string } | { readonly emote: string; readonly url: string };
+
+/** Where emote images come from; the pages' content policies allow exactly these. */
+export const emoteImageOrigins = ['https://static-cdn.jtvnw.net', 'https://files.kick.com'] as const;
 
 /** Enough for the page to start with recent context. */
 export const chatBufferSize = 300;

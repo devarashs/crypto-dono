@@ -310,9 +310,12 @@ Requested 2026-10-14.
 - [x] 39. The latest 300 chat messages are kept in the database, so a restart
       does not empty the dashboard. Reverses the 2026-10-13 "never stored"
       decision at the streamer's request; moderators' removals delete rows too.
-- [ ] 40. Twitch and Kick emotes shown as images on the dashboard, the chat
+- [x] 40. Twitch and Kick emotes shown as images on the dashboard, the chat
       overlay and the scenes; third-party emotes (7TV, BTTV, FFZ) stay text.
       Unicode emoji render on stream.
+      Verified against a busy public Twitch channel: Twitch emote images loaded
+      in the chat overlay under its content policy; third-party emotes stayed
+      text. Kick emotes covered by tests (Kick's documented format).
 
 ## Deferred ideas
 

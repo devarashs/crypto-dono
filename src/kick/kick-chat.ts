@@ -5,7 +5,7 @@
  * arrive inside the text as "[emote:<id>:<name>]"; they are shown as their name.
  */
 import { z } from 'zod';
-import { safeColor, type ChatMessage, type ChatRemoval } from '../dashboard/chat.ts';
+import { safeColor, type ChatFragment, type ChatMessage, type ChatRemoval } from '../dashboard/chat.ts';
 
 const chatSchema = z.object({
   message_id: z.string().min(1),
@@ -26,6 +26,23 @@ const chatSchema = z.object({
   content: z.string(),
   created_at: z.string().nullish(),
 });
+
+/** Kick writes emotes into the text as "[emote:<id>:<name>]". */
+const emotePattern = /\[emote:(\d+):([^\]]+)\]/g;
+
+/** Splits Kick's text into runs and emotes; `undefined` when there are none. */
+export function kickFragments(content: string): ChatFragment[] | undefined {
+  const fragments: ChatFragment[] = [];
+  let cursor = 0;
+  for (const match of content.matchAll(emotePattern)) {
+    if (match.index > cursor) fragments.push({ text: content.slice(cursor, match.index) });
+    fragments.push({ emote: match[2]!, url: `https://files.kick.com/emotes/${match[1]}/fullsize` });
+    cursor = match.index + match[0].length;
+  }
+  if (fragments.length === 0) return undefined;
+  if (cursor < content.length) fragments.push({ text: content.slice(cursor) });
+  return fragments;
+}
 
 const banSchema = z.object({
   broadcaster: z.object({ user_id: z.union([z.number(), z.string()]) }).loose(),
@@ -61,6 +78,7 @@ export function translateKickChat(payload: unknown, broadcasterId: string, recei
     user: data.sender.username,
     ...(color !== undefined && { color }),
     badges: (data.sender.identity?.badges ?? []).map((badge) => badge.type.toLowerCase()),
-    text: data.content.replace(/\[emote:\d+:([^\]]+)\]/g, '$1'),
+    text: data.content.replace(emotePattern, '$2'),
+    ...(kickFragments(data.content) !== undefined && { fragments: kickFragments(data.content)! }),
   };
 }
