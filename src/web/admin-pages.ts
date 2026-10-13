@@ -35,6 +35,9 @@ export type AdminDashboardModel = {
   readonly overlayUrl: string;
   /** OBS Browser Source for the on-stream table of biggest donations. */
   readonly boardUrl: string;
+  /** OBS Browser Sources for on-stream chat and the viewer count. */
+  readonly chatUrl: string;
+  readonly viewersUrl: string;
   /** OBS Browser Sources for the Starting Soon, Be Right Back and Ending Soon scenes. */
   readonly sceneUrls: readonly string[];
   readonly testAlertUrl: string;
@@ -107,6 +110,10 @@ export function renderAdminDashboard(model: AdminDashboardModel): SafeHtml {
         <dd><code>${model.overlayUrl}</code></dd>
         <dt>OBS top-donations table</dt>
         <dd><code>${model.boardUrl}</code></dd>
+        <dt>OBS chat</dt>
+        <dd><code>${model.chatUrl}</code></dd>
+        <dt>OBS viewer count</dt>
+        <dd><code>${model.viewersUrl}</code></dd>
         <dt>OBS scenes</dt>
         <dd>${model.sceneUrls.map((url) => html`<code>${url}</code><br>`)}</dd>
         <dt>Test alert</dt>
