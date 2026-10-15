@@ -34,6 +34,8 @@ export type ChatFragment = { readonly text: string } | { readonly emote: string;
 /** Where emote images come from; the pages' content policies allow exactly these. */
 export const emoteImageOrigins = ['https://static-cdn.jtvnw.net', 'https://files.kick.com'] as const;
 
+const chatPlatforms = ['twitch', 'kick'] as const satisfies readonly ChatMessage['platform'][];
+
 /** Enough for the page to start with recent context. */
 export const chatBufferSize = 300;
 
@@ -87,6 +89,15 @@ export function createChatBuffer(
         if (isRemovedBy(messages[index]!, removal)) messages.splice(index, 1);
       }
       hub.publish({ type: 'chat-remove', removal, ids: removedIds });
+    },
+
+    /**
+     * Empties chat everywhere: the buffer, the database, and every open
+     * dashboard, overlay and scene. Sent as a whole-platform removal for each
+     * platform, which every page already understands.
+     */
+    clear(): void {
+      for (const platform of chatPlatforms) this.remove({ kind: 'all', platform });
     },
 
     /** Oldest first. */

@@ -18,7 +18,13 @@ export function renderLiveDashboardPage(): SafeHtml {
           <a class="link" href="/admin">Admin</a>
         </header>
         <section class="live__panel live__panel--chat" aria-labelledby="live-chat-title">
-          <h2 class="panel__title" id="live-chat-title">Chat</h2>
+          <div class="live__panel-header">
+            <h2 class="panel__title" id="live-chat-title">Chat</h2>
+            <form method="post" action="/admin/live/chat/clear">
+              <button class="button button--ghost button--small" type="submit">Clear chat</button>
+            </form>
+          </div>
+          <p class="footnote">Clears here, on the chat overlay and on the scenes. Chat also clears by itself when your stream goes live.</p>
           <ol class="chat" id="chat" aria-live="off"></ol>
           <p class="empty-state" id="chat-empty" hidden>No chat yet. Twitch and Kick messages show up here, newest at the bottom.</p>
           <button class="button button--small chat__jump" id="chat-jump" type="button" hidden>New messages</button>

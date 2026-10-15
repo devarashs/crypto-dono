@@ -329,6 +329,13 @@ YouTube is not pursued. Layouts adapt instead of assuming several platforms.
       Verified in Chromium: Twitch-only chat hides the tags and mixed chat
       shows them; the pill reads "128 watching" with one platform live, adds
       "Twitch 90 · Kick 38" with two, and hides while offline.
+- [x] 42. Clearing chat: a Clear chat button on the dashboard empties chat on
+      the dashboard, the chat overlay and the scenes (and the saved copy); chat
+      also clears by itself when a channel goes from offline to live, so each
+      stream starts empty. A restart mid-stream does not clear it.
+      Verified in Chromium against a busy public channel: none of the messages
+      on the overlay before the click survived it; the dashboard reloaded with
+      only newer messages.
 
 ## Deferred ideas
 

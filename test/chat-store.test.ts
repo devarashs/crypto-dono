@@ -47,6 +47,24 @@ describe('chat store', () => {
     expect(afterRestart.recent().map((entry) => entry.id)).toEqual(['b']);
   });
 
+  it('clears everything, in the database and for open pages, for every platform', () => {
+    const database = openDatabase(':memory:');
+    const hub = createDashboardHub();
+    const received: unknown[] = [];
+    hub.subscribe((event) => received.push(event));
+    const buffer = createChatBuffer(hub, { store: createChatStore(database) });
+    buffer.add(message('t1'));
+    buffer.add(message('k1', { platform: 'kick' }));
+    received.length = 0;
+    buffer.clear();
+    expect(buffer.recent()).toEqual([]);
+    expect(createChatStore(database).recent()).toEqual([]);
+    expect(received).toEqual([
+      { type: 'chat-remove', removal: { kind: 'all', platform: 'twitch' }, ids: ['t1'] },
+      { type: 'chat-remove', removal: { kind: 'all', platform: 'kick' }, ids: ['k1'] },
+    ]);
+  });
+
   it('ignores a message delivered twice', () => {
     const store = createChatStore(openDatabase(':memory:'));
     store.save(message('a'));
