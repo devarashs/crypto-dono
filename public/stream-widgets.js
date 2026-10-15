@@ -58,6 +58,15 @@ function matchesRemoval(row, removal) {
   );
 }
 
+/**
+ * Platform tags (T, K) only mean something when chat mixes platforms, so the
+ * list is marked multi-platform only while it shows more than one.
+ */
+export function markChatPlatforms(list) {
+  const platforms = new Set([...list.children].map((row) => row.dataset.platform));
+  list.classList.toggle('is-multi-platform', platforms.size > 1);
+}
+
 /** Matches --overlay-exit-duration-ish: long enough for the fade to finish. */
 const leaveMs = 400;
 
@@ -74,6 +83,7 @@ export function createStreamChat(list, { maxMessages, fadeSeconds }) {
     setTimeout(() => {
       row.remove();
       shownIds.delete(row.dataset.id);
+      markChatPlatforms(list);
     }, leaveMs);
   }
 
@@ -104,6 +114,7 @@ export function createStreamChat(list, { maxMessages, fadeSeconds }) {
     shownIds.add(message.id);
     const row = render(message);
     list.append(row);
+    markChatPlatforms(list);
     const rows = [...list.children].filter((child) => !child.classList.contains('is-leaving'));
     for (const old of rows.slice(0, Math.max(0, rows.length - maxMessages))) leave(old);
     if (Number.isFinite(remainingMs)) setTimeout(() => leave(row), remainingMs);
@@ -144,6 +155,11 @@ export function renderViewerCount(element, statuses) {
   headline.append(dot, number, ' watching');
   const breakdown = document.createElement('p');
   breakdown.className = 'viewer-pill__platforms';
+  // One platform live: the total already says it all.
+  if (live.length === 1) {
+    element.replaceChildren(headline);
+    return;
+  }
   breakdown.textContent = live
     .map((status) => `${platformNames[status.platform] ?? status.platform} ${numberFormat.format(status.viewers ?? 0)}`)
     .join(' · ');

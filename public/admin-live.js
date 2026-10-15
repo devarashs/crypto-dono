@@ -3,7 +3,7 @@
  * The server sends text already worded as headline parts; everything is placed
  * with textContent, never parsed as HTML.
  */
-import { fillChatText } from './stream-widgets.js';
+import { fillChatText, markChatPlatforms } from './stream-widgets.js';
 
 const list = document.getElementById('activity');
 const empty = document.getElementById('activity-empty');
@@ -167,6 +167,7 @@ function addChat(messages) {
     chatList.append(renderChat(message));
   }
   while (chatList.children.length > maximumChat) chatList.firstElementChild.remove();
+  markChatPlatforms(chatList);
   chatEmpty.hidden = chatList.children.length > 0;
   // Follow new messages unless the streamer scrolled up to read something.
   if (stick) scrollChatToBottom();
@@ -230,6 +231,7 @@ stream.addEventListener('chat-remove', (event) => {
       (removal.kind === 'all' && platform === removal.platform);
     if (removed) row.remove();
   }
+  markChatPlatforms(chatList);
   chatEmpty.hidden = chatList.children.length > 0;
 });
 

@@ -570,6 +570,10 @@ a.tabs__tab:hover {
   vertical-align: 0.05em;
 }
 
+.chat:not(.is-multi-platform) .chat__platform {
+  display: none;
+}
+
 .chat__message--twitch .chat__platform {
   background: var(--color-twitch);
 }
