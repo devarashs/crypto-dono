@@ -86,6 +86,29 @@ describe('stream status poller', () => {
     expect(getStream).toHaveBeenCalledOnce();
   });
 
+  it('reports a channel going live only after it was seen offline', async () => {
+    connections.connect('twitch', '111', 'machinearash');
+    let live = true;
+    const wentLive = vi.fn();
+    const poller = createStreamStatusPoller({
+      connections,
+      hub: createDashboardHub(),
+      twitch: { getStream: async (): Promise<LiveStatus> => (live ? { live: true, viewers: 1, startedAt: 't', title: '' } : { live: false }) },
+      onWentLive: wentLive,
+    });
+    // First look after a restart, already live: not a start.
+    await poller.refresh();
+    expect(wentLive).not.toHaveBeenCalled();
+    live = false;
+    await poller.refresh();
+    live = true;
+    await poller.refresh();
+    expect(wentLive).toHaveBeenCalledExactlyOnceWith('twitch');
+    // Still live: no second start.
+    await poller.refresh();
+    expect(wentLive).toHaveBeenCalledOnce();
+  });
+
   it('polls on its interval only while someone is watching', async () => {
     vi.useFakeTimers();
     try {

@@ -77,6 +77,11 @@ const streamStatus = createStreamStatusPoller({
   ...(twitchApi !== undefined && { twitch: twitchApi }),
   ...(kickApi !== undefined && { kick: kickApi }),
   onError: (platform, error) => app.log.warn({ err: error, platform }, 'Could not read stream status'),
+  // Each stream starts with empty chat, not yesterday's.
+  onWentLive: (platform) => {
+    app.log.info({ platform }, 'Stream went live; chat cleared');
+    chat.clear();
+  },
 });
 // Viewers' chat, the latest few hundred kept in the database; shared by the
 // Kick webhook and the Twitch reader.

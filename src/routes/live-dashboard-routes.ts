@@ -4,6 +4,7 @@
  *   GET /admin/live          the page
  *   GET /admin/live/stream   Server-Sent Events: a snapshot of recent activity,
  *                            then each new item as it happens
+ *   POST /admin/live/chat/clear  empty chat on the dashboard, overlay and scenes
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { activityFromDonation, activityFromEvent, mergeActivity, type ActivityItem } from '../dashboard/activity.ts';
@@ -24,7 +25,7 @@ export type LiveDashboardDependencies = {
   readonly eventLog?: EventLog;
   readonly eventTemplates: Readonly<Record<StreamEventKind, string>>;
   /** Recent chat, in memory only. */
-  readonly chat?: Pick<ChatBuffer, 'recent'>;
+  readonly chat?: Pick<ChatBuffer, 'recent' | 'clear'>;
   /** The status bar's source; absent when neither Twitch nor Kick is set up. */
   readonly streamStatus?: Pick<StreamStatusPoller, 'current' | 'refresh'>;
 };
@@ -52,6 +53,12 @@ export function registerLiveDashboardRoutes(
     // The page runs its own script to receive updates; still no inline script.
     reply.header('content-security-policy', liveDashboardPolicy);
     return sendHtml(reply, 200, renderLiveDashboardPage());
+  });
+
+  app.post('/admin/live/chat/clear', { preHandler: requireAdmin }, async (request, reply) => {
+    chat?.clear();
+    request.log.info('Chat cleared from the dashboard');
+    return reply.redirect('/admin/live', 303);
   });
 
   app.get('/admin/live/stream', { preHandler: requireAdmin }, async (request, reply) => {

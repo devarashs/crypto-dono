@@ -76,6 +76,7 @@ function build(servedKeys: readonly string[] = [pemOf(pairs[0]!.publicKey)], env
     chat: {
       add: (message: ChatMessage) => void chat.push(message),
       remove: (removal: ChatRemoval) => void removals.push(removal),
+      clear: () => void chat.splice(0),
       recent: () => chat,
     },
   });

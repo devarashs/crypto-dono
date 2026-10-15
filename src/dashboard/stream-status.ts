@@ -31,6 +31,11 @@ export type StreamStatusDependencies = {
   readonly twitch?: { getStream: TwitchApi['getStream'] };
   readonly kick?: { getStream: KickApi['getStream'] };
   readonly onError?: (platform: string, error: unknown) => void;
+  /**
+   * A channel went from offline to live. Only after it was seen offline: a
+   * restart in the middle of a stream (nothing seen yet) does not count.
+   */
+  readonly onWentLive?: (platform: ChannelStatus['platform']) => void;
 };
 
 export type StreamStatusPoller = ReturnType<typeof createStreamStatusPoller>;
@@ -63,7 +68,12 @@ export function createStreamStatusPoller(dependencies: StreamStatusDependencies)
   function refresh(): Promise<void> {
     inFlight ??= (async () => {
       const results = await Promise.all([statusOf('twitch', dependencies.twitch), statusOf('kick', dependencies.kick)]);
+      const previous = latest;
       latest = results.filter((status): status is ChannelStatus => status !== null);
+      for (const status of latest) {
+        const before = previous.find((entry) => entry.platform === status.platform)?.state;
+        if (before === 'offline' && status.state === 'live') dependencies.onWentLive?.(status.platform);
+      }
       hub.publish({ type: 'status', statuses: latest });
     })().finally(() => {
       inFlight = undefined;

@@ -535,6 +535,13 @@ a.tabs__tab:hover {
   position: relative;
 }
 
+.live__panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
 .chat {
   flex: 1;
   min-height: 0;

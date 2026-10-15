@@ -196,6 +196,41 @@ describe('live dashboard', () => {
     expect(refreshes).toBe(1);
   });
 
+  it('clears chat from the dashboard, only for a signed-in admin', async () => {
+    build();
+    let cleared = 0;
+    await app.close();
+    store = createInMemoryStore();
+    app = buildApp(
+      loadConfig({
+        PUBLIC_BASE_URL: 'https://dono.example.com',
+        NOWPAYMENTS_API_KEY: 'k',
+        NOWPAYMENTS_IPN_SECRET: 's',
+        OVERLAY_TOKEN: 'overlay-token-for-tests-0123456789',
+        LOG_LEVEL: 'fatal',
+        ADMIN_PASSWORD: password,
+      }),
+      {
+        donations: store.donations,
+        leaderboard: store.leaderboard,
+        connections: store.connections,
+        nowPayments: { createInvoice: async () => ({ invoiceId: '1', invoiceUrl: 'https://nowpayments.io/x' }) },
+        alertHub: createAlertHub(),
+        adminSessionSecret: 'a'.repeat(64),
+        chat: { add: () => {}, remove: () => {}, recent: () => [], clear: () => void cleared++ },
+      },
+    );
+    const signedOut = await app.inject({ method: 'POST', url: '/admin/live/chat/clear' });
+    expect(signedOut.headers.location).toBe('/admin/login');
+    expect(cleared).toBe(0);
+    const cookie = await signIn();
+    const page = await app.inject({ method: 'GET', url: '/admin/live', headers: { cookie } });
+    expect(page.body).toContain('action="/admin/live/chat/clear"');
+    const response = await app.inject({ method: 'POST', url: '/admin/live/chat/clear', headers: { cookie } });
+    expect(response.headers.location).toBe('/admin/live');
+    expect(cleared).toBe(1);
+  });
+
   it('still records an event whose alert is switched off', async () => {
     build({ EVENT_ALERTS: 'none' });
     store.connections.connect('twitch', '111', 'machinearash');
