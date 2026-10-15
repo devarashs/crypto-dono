@@ -55,6 +55,11 @@
   vertical-align: 0.15em;
 }
 
+/* Only while chat mixes platforms; one platform needs no label. */
+.stream-chat:not(.is-multi-platform) .stream-chat__platform {
+  display: none;
+}
+
 .stream-chat__message--twitch .stream-chat__platform {
   background: var(--color-twitch);
 }

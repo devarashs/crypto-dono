@@ -317,6 +317,19 @@ Requested 2026-10-14.
       in the chat overlay under its content policy; third-party emotes stayed
       text. Kick emotes covered by tests (Kick's documented format).
 
+## Phase 14 — Twitch only
+
+Decided 2026-10-15: the streamer streams on Twitch only from now on. Kick stays
+in the code but is switched off (Disconnect, then KICK_* emptied in .env), and
+YouTube is not pursued. Layouts adapt instead of assuming several platforms.
+
+- [x] 41. One platform, no clutter: the viewer pill shows only the total when
+      one platform is live, and chat's platform tags (T, K) appear only while
+      chat mixes platforms, on the dashboard, the chat overlay and the scenes.
+      Verified in Chromium: Twitch-only chat hides the tags and mixed chat
+      shows them; the pill reads "128 watching" with one platform live, adds
+      "Twitch 90 · Kick 38" with two, and hides while offline.
+
 ## Deferred ideas
 
 - Donor-chosen text-to-speech voices (one multi-speaker Piper model, e.g.
