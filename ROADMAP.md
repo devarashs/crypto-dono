@@ -337,6 +337,18 @@ YouTube is not pursued. Layouts adapt instead of assuming several platforms.
       on the overlay before the click survived it; the dashboard reloaded with
       only newer messages.
 
+## Phase 15 — New server
+
+- [x] 43. Moved off AWS (2026-11-05): the Lightsail instance was gone, so the
+      new server (Ubuntu 24.04, 1 GB, 144.172.99.102) started fresh: a key-only
+      `ubuntu` user (no passwords, no root logins), ufw allowing 22/80/443,
+      2 GB swap, unattended upgrades, Docker from Docker's repository, the
+      nightly backup, and a deploy key restricted to deploy/update.sh. The
+      domain was repointed in Cloudflare, so NOWPayments, Twitch and OBS
+      links are unchanged; donation history and saved chat did not survive.
+      Verified: HTTPS with a Let's Encrypt certificate, the admin page, a
+      manual backup, and an automatic deploy from GitHub.
+
 ## Deferred ideas
 
 - Donor-chosen text-to-speech voices (one multi-speaker Piper model, e.g.
